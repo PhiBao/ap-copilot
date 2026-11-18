@@ -1,0 +1,16 @@
+node_modules/
+.pnpm-store/
+.next/
+out/
+cache/
+lib/
+.env
+.env.local
+.env.*.local
+*.log
+.DS_Store
+coverage/
+dist/
+.vscode/
+.idea/
+anvil.db*

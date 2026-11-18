@@ -1,0 +1,26 @@
+{
+  "name": "ap-copilot",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Approval-first accounts-payable copilot for small Web3 teams on QDay Aevum.",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "pnpm --filter web dev",
+    "build": "pnpm --filter web build",
+    "typecheck": "pnpm -r typecheck",
+    "example": "pnpm --filter examples run",
+    "check:shanghai": "node tools/check-shanghai.mjs contracts/out"
+  },
+  "pnpm": {
+    "overrides": {
+      "@base-org/account": "2.2.0",
+      "ws@>=8.0.0 <8.21.0": "^8.21.0"
+    },
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  }
+}
