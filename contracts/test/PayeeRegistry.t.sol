@@ -15,7 +15,7 @@ contract PayeeRegistryTest is Test {
     bytes32 internal constant ID_B = keccak256("payee:bob");
 
     function setUp() public {
-        registry = new PayeeRegistry(1 hours);
+        registry = new PayeeRegistry(1 hours, address(this), address(this));
     }
 
     function test_register_and_activeAccount() public {
@@ -118,6 +118,30 @@ contract PayeeRegistryTest is Test {
         registry.remove(ID_A);
         registry.register(ID_A, carol, "Carol");
         assertEq(registry.activeAccount(ID_A), carol);
+    }
+
+    function test_only_owner_can_register_and_change_address() public {
+        vm.prank(carol);
+        vm.expectRevert(abi.encodeWithSelector(PayeeRegistry.NotOwner.selector));
+        registry.register(ID_A, alice, "Alice");
+        registry.register(ID_A, alice, "Alice");
+        vm.prank(carol);
+        vm.expectRevert(abi.encodeWithSelector(PayeeRegistry.NotOwner.selector));
+        registry.requestChange(ID_A, bob, "hijack");
+    }
+
+    function test_guardian_can_freeze_but_not_register() public {
+        PayeeRegistry r2 = new PayeeRegistry(1 hours, alice, bob);
+        vm.prank(alice);
+        r2.register(ID_A, carol, "Carol");
+
+        vm.prank(bob); // guardian
+        r2.freeze(ID_A);
+        assertFalse(r2.isActive(ID_A));
+
+        vm.prank(bob);
+        vm.expectRevert(abi.encodeWithSelector(PayeeRegistry.NotOwner.selector));
+        r2.register(ID_B, alice, "Alice");
     }
 
     function test_second_claim_on_same_payee_is_possible_but_explicit() public {

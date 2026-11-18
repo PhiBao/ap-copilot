@@ -29,7 +29,7 @@ contract PolicyTest is Test {
         owner = vm.addr(OWNER_KEY);
         attacker = vm.addr(ATTACKER_KEY);
         token = new MockUSD8();
-        registry = new PayeeRegistry(1 hours);
+        registry = new PayeeRegistry(1 hours, address(this), address(this));
         policy = new Policy(IERC20(address(token)), registry, owner);
 
         registry.register(ID_A, alice, "Alice Studio");

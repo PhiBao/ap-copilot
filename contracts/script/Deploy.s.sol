@@ -14,19 +14,25 @@ contract Deploy is Script {
     address constant TUSD8_AEVUM = 0x456569838f1d43009A91ebA4263147Afd7233483;
 
     function run() external {
-        uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
+        bool unlocked = vm.envOr("UNLOCKED", false);
+        uint256 deployerPrivateKey = unlocked ? 0 : vm.envUint("PRIVATE_KEY");
         bool local = vm.envOr("LOCAL_TOKEN", false);
         address token = vm.envOr("TOKEN", TUSD8_AEVUM);
         address owner = vm.envOr("OWNER", address(0));
         uint64 changeDelay = uint64(vm.envOr("CHANGE_DELAY", uint256(7 days)));
 
         if (owner == address(0)) {
-            owner = vm.addr(deployerPrivateKey);
+            owner = unlocked ? msg.sender : vm.addr(deployerPrivateKey);
         }
 
-        vm.startBroadcast(deployerPrivateKey);
+        if (unlocked) {
+            vm.startBroadcast();
+        } else {
+            vm.startBroadcast(deployerPrivateKey);
+        }
 
-        PayeeRegistry registry = new PayeeRegistry(changeDelay);
+        address guardian = vm.envOr("GUARDIAN", owner);
+        PayeeRegistry registry = new PayeeRegistry(changeDelay, owner, guardian);
         console.log("PayeeRegistry", address(registry));
 
         Policy policy = new Policy(IERC20(token), registry, owner);

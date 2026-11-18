@@ -29,6 +29,10 @@ contract PayeeRegistry {
 
     /// @notice Minimum delay before a requested payout change can be applied.
     uint64 public immutable minChangeDelay;
+    /// @notice The admin who registers payees and applies changes.
+    address public immutable owner;
+    /// @notice A separate key that can freeze or cancel instantly. The owner can too.
+    address public immutable guardian;
 
     mapping(bytes32 payeeId => Payee) private _payees;
     mapping(address account => bytes32) private _accountToId;
@@ -51,10 +55,27 @@ contract PayeeRegistry {
     error ChangeWindowPassed(uint64 applyAt, uint64 now_);
     error Frozen(bytes32 payeeId);
     error NotFrozen(bytes32 payeeId);
+    error NotOwner();
+    error NotGuardian();
 
     /// @param minChangeDelay_ seconds a payout change waits before it can be applied.
-    constructor(uint64 minChangeDelay_) {
+    /// @param owner_ admin for registration and address changes.
+    /// @param guardian_ separate key that can freeze/cancel without the owner key.
+    constructor(uint64 minChangeDelay_, address owner_, address guardian_) {
+        if (owner_ == address(0) || guardian_ == address(0)) revert ZeroAddress();
         minChangeDelay = minChangeDelay_;
+        owner = owner_;
+        guardian = guardian_;
+    }
+
+    modifier onlyOwner() {
+        if (msg.sender != owner) revert NotOwner();
+        _;
+    }
+
+    modifier onlyGuardianOrOwner() {
+        if (msg.sender != guardian && msg.sender != owner) revert NotGuardian();
+        _;
     }
 
     // ---------------------------------------------------------------- views
@@ -90,7 +111,7 @@ contract PayeeRegistry {
     // ------------------------------------------------------------- registration
 
     /// @notice Register a new verified payee. Idempotency is the caller's job.
-    function register(bytes32 payeeId, address account, string calldata label) external {
+    function register(bytes32 payeeId, address account, string calldata label) external onlyOwner {
         if (payeeId == bytes32(0)) revert ZeroId();
         if (account == address(0)) revert ZeroAddress();
         if (_payees[payeeId].status != Status.None) revert PayeeExists(payeeId);
@@ -113,7 +134,7 @@ contract PayeeRegistry {
 
     /// @notice Request a payout address change. Lands only after `minChangeDelay`.
     /// @dev While pending, the old address stays active and payments still go to it.
-    function requestChange(bytes32 payeeId, address toAccount, string calldata label) external {
+    function requestChange(bytes32 payeeId, address toAccount, string calldata label) external onlyOwner {
         Payee storage p = _payees[payeeId];
         if (p.status != Status.Active) revert NotActive(payeeId);
         if (toAccount == address(0)) revert ZeroAddress();
@@ -129,7 +150,7 @@ contract PayeeRegistry {
     }
 
     /// @notice Apply a requested change once the delay has elapsed.
-    function applyChange(bytes32 payeeId) external {
+    function applyChange(bytes32 payeeId) external onlyOwner {
         Payee storage p = _payees[payeeId];
         if (p.status != Status.PendingChange) revert NotPending(payeeId);
         if (block.timestamp < p.changeRequestedAt + minChangeDelay) {
@@ -148,7 +169,7 @@ contract PayeeRegistry {
     }
 
     /// @notice Cancel a pending change; the old address stays active.
-    function cancelChange(bytes32 payeeId) external {
+    function cancelChange(bytes32 payeeId) external onlyGuardianOrOwner {
         Payee storage p = _payees[payeeId];
         if (p.status != Status.PendingChange) revert NotPending(payeeId);
         p.status = Status.Active;
@@ -160,7 +181,7 @@ contract PayeeRegistry {
     // ------------------------------------------------------------------ disputes
 
     /// @notice Freeze a payee during a dispute. Payments to it revert while frozen.
-    function freeze(bytes32 payeeId) external {
+    function freeze(bytes32 payeeId) external onlyGuardianOrOwner {
         Payee storage p = _payees[payeeId];
         if (p.status == Status.None) revert PayeeNotFound(payeeId);
         if (p.status == Status.Frozen) revert Frozen(payeeId);
@@ -168,7 +189,7 @@ contract PayeeRegistry {
         emit PayeeFrozen(payeeId, p.account, uint64(block.timestamp));
     }
 
-    function unfreeze(bytes32 payeeId) external {
+    function unfreeze(bytes32 payeeId) external onlyOwner {
         Payee storage p = _payees[payeeId];
         if (p.status != Status.Frozen) revert NotFrozen(payeeId);
         p.status = Status.Active;
@@ -177,7 +198,7 @@ contract PayeeRegistry {
 
     /// @notice Remove a payee entirely. Only callable while frozen, so a disputed
     ///         payee cannot be quietly deleted and re-registered to launder state.
-    function remove(bytes32 payeeId) external {
+    function remove(bytes32 payeeId) external onlyOwner {
         Payee storage p = _payees[payeeId];
         if (p.status != Status.Frozen) revert NotFrozen(payeeId);
         delete _accountToId[p.account];
