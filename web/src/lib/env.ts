@@ -72,4 +72,4 @@ export function networkByKey(key: string | null | undefined): Network | undefine
 
 export const walletConnectProjectId = process.env.NEXT_PUBLIC_WC_PROJECT_ID || undefined;
 export const deployEnabled = process.env.NEXT_PUBLIC_ENABLE_DEPLOY === "1";
-export const repoUrl = (process.env.NEXT_PUBLIC_REPO_URL?.trim() || "https://github.com/qday/ap-copilot").replace(/\.git$|\/+$/g, "");
+export const repoUrl = (process.env.NEXT_PUBLIC_REPO_URL?.trim() || "https://github.com/PhiBao/ledgerly").replace(/\.git$|\/+$/g, "");

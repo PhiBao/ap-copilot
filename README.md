@@ -2,9 +2,9 @@
 
 **Drop in your invoices; it stages one verified batch you approve once — and it can never pay the wrong payee.**
 
-- **Live app:** https://ap-copilot.vercel.app/ (public, no login)
-- **Demo video:** https://ap-copilot.vercel.app/demo.mp4 (captioned screencast of the live app; see `docs/DEMO.md` for the voice script)
-- **Repo:** https://github.com/PhiBao/ap-copilot
+- **Live app:** https://ledgerly-payables.vercel.app/ (public, no login)
+- **Demo video:** https://ledgerly-payables.vercel.app/demo.mp4 (captioned screencast of the live app; see `docs/DEMO.md` for the voice script)
+- **Repo:** https://github.com/PhiBao/ledgerly
 - **Track:** Native AI Assistants (fallback: Open Innovation) · Aevum Builder Challenge #1
 
 ### Try it in 60 seconds
@@ -110,7 +110,7 @@ To deploy your own instance, use the gated `/deploy` page with a funded browser 
 
 ## Demo
 
-- **Live URL:** https://ap-copilot.vercel.app/
+- **Live URL:** https://ledgerly-payables.vercel.app/
 - **Flow:** Desk → Payees (freeze/change) → Batch (example → edit → verify → settle) → Proof (refresh → export).
 - **What to try first:** on Batch, edit an amount above the 0.5 tUSD8 per-payment cap. The guard turns red and the settle button disables — the contract will refuse it too.
 - **Setup:** connect any EVM wallet with a little tQDAY for gas and tUSD8 for the demo; faucet at https://faucet.qday.info/en.
