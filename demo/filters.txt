@@ -1,0 +1,9 @@
+[0:v]scale=1280:-2,fps=15[base];
+[1:v]format=rgba[c1];
+[2:v]format=rgba[c2];
+[3:v]format=rgba[c3];
+[4:v]format=rgba[c4];
+[base][c1]overlay=x=0:y=24:enable='between(t,0,14)'[v1];
+[v1][c2]overlay=x=0:y=24:enable='between(t,14,58)'[v2];
+[v2][c3]overlay=x=0:y=24:enable='between(t,58,80)'[v3];
+[v3][c4]overlay=x=0:y=24:enable='gte(t,80)'[out]

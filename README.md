@@ -3,7 +3,7 @@
 **Drop in your invoices; it stages one verified batch you approve once — and it can never pay the wrong payee.**
 
 - **Live app:** https://ap-copilot.vercel.app/ (public, no login)
-- **Demo video:** _to be linked before submission — see `docs/DEMO.md` for the script_
+- **Demo video:** https://ap-copilot.vercel.app/demo.mp4 (captioned screencast of the live app; see `docs/DEMO.md` for the voice script)
 - **Repo:** https://github.com/PhiBao/ap-copilot
 - **Track:** Native AI Assistants (fallback: Open Innovation) · Aevum Builder Challenge #1
 
