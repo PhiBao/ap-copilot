@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import { useAccount, useReadContract, useReadContracts, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
 import { keccak256, toHex, type Address } from "viem";
 import { payeeRegistryAbi } from "@/lib/contracts";
+import { listRegisteredPayeeIds } from "@/lib/payee-events";
+import { usePublicClient } from "wagmi";
 import { useNetwork } from "@/lib/network";
 
 interface PayeeRow {
@@ -19,6 +21,7 @@ export default function Payees() {
   const { net } = useNetwork();
   const { address } = useAccount();
   const registry = net.registry;
+  const publicClient = usePublicClient({ chainId: net.chain.id });
   const [label, setLabel] = useState("");
   const [account, setAccount] = useState("");
   const [error, setError] = useState("");
@@ -26,6 +29,17 @@ export default function Payees() {
 
   // Known ids from local metadata; on-chain state is the source of truth.
   const [knownIds, setKnownIds] = useState<`0x${string}`[]>([]);
+  useEffect(() => {
+    if (!publicClient || !registry) return;
+    listRegisteredPayeeIds(publicClient as never, registry, net.deployBlock ?? 0n)
+      .then((onchain) => {
+        // Merge on-chain book with anything registered from this browser.
+        setKnownIds((prev) => [...new Set([...onchain, ...prev])]);
+        try { localStorage.setItem(`ledgerly:payees:${net.key}`, JSON.stringify(onchain)); } catch { /* ignore */ }
+      })
+      .catch(() => {});
+  }, [publicClient, registry, net.deployBlock, net.key]);
+
   useEffect(() => {
     try {
       const raw = localStorage.getItem(`ledgerly:payees:${net.key}`);
@@ -58,15 +72,15 @@ export default function Payees() {
     if (!results) return;
     setRows(results.flatMap((r, i) => {
       if (r.status !== "success" || !r.result) return [];
-      const p = r.result as unknown as [Address, string, bigint, number, bigint, Address, string];
-      if (p[3] === 0) return [];
+      const p = r.result as unknown as { account: Address; label: string; registeredAt: bigint; status: number; changeRequestedAt: bigint; pendingAccount: Address; pendingLabel: string };
+      if (p.status === 0) return [];
       return [{
         id: knownIds[i],
-        label: p[1],
-        account: p[0],
-        status: p[3],
-        pendingAccount: p[5] !== "0x0000000000000000000000000000000000000000" ? p[5] : undefined,
-        changeRequestedAt: p[4] > 0n ? p[4] : undefined,
+        label: p.label,
+        account: p.account,
+        status: p.status,
+        pendingAccount: p.pendingAccount !== "0x0000000000000000000000000000000000000000" ? p.pendingAccount : undefined,
+        changeRequestedAt: p.changeRequestedAt > 0n ? p.changeRequestedAt : undefined,
       }];
     }));
   }, [results, knownIds]);

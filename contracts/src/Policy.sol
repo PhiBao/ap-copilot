@@ -98,6 +98,7 @@ contract Policy is EIP712 {
     error ArrayLengthMismatch();
     error TransferFailed();
     error NothingToWithdraw();
+    error InsufficientBalance(uint256 available, uint256 needed);
 
     constructor(IERC20 token_, PayeeRegistry registry_, address owner_)
         EIP712("APCopilotPolicy", "1")
@@ -243,14 +244,16 @@ contract Policy is EIP712 {
 
     function _settle(bytes32 batchId, Payout[] calldata payouts) internal {
         _checkBatch(batchId, payouts);
-        uint256 total;
+        uint256 total = _batchTotal(payouts);
+        uint256 available = token.balanceOf(address(this));
+        if (available < total) revert InsufficientBalance(available, total);
+
         for (uint256 i = 0; i < payouts.length; i++) {
             Payout calldata p = payouts[i];
             address to = registry.activeAccount(p.payeeId);
-            // Pull from the owner: they approved this contract in the same session.
-            token.safeTransferFrom(owner, to, p.amount);
+            // Spend the policy's own funded budget. The owner pre-funded it with deposit().
+            token.safeTransfer(to, p.amount);
             _recordPayout(batchId, p, to);
-            total += p.amount;
         }
         _markSettled(batchId, payouts.length, total);
     }

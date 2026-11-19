@@ -28,6 +28,7 @@ export default function Batch() {
   const [batchId, setBatchId] = useState("");
   const [error, setError] = useState("");
   const [hash, setHash] = useState<`0x${string}` | undefined>();
+  const [batchHash, setBatchHash] = useState<`0x${string}` | undefined>();
   const [sentTotal, setSentTotal] = useState(0n);
 
   const { writeContractAsync, isPending } = useWriteContract();
@@ -59,11 +60,11 @@ export default function Batch() {
   const resolved = useMemo(() => reviewed.map((l, i) => {
     const r = checks?.[i];
     if (!r || r.status !== "success" || !r.result) return l;
-    const p = r.result as unknown as [Address, string, bigint, number, bigint, Address, string];
-    if (p[3] === 0) return { ...l, status: "unknown" as const };
-    if (p[3] === 2) return { ...l, status: "pending" as const, account: p[0] };
-    if (p[3] === 3) return { ...l, status: "frozen" as const, account: p[0] };
-    return { ...l, status: "ok" as const, account: p[0] };
+    const p = r.result as unknown as { account: Address; label: string; registeredAt: bigint; status: number; changeRequestedAt: bigint; pendingAccount: Address; pendingLabel: string };
+    if (p.status === 0) return { ...l, status: "unknown" as const };
+    if (p.status === 2) return { ...l, status: "pending" as const, account: p.account };
+    if (p.status === 3) return { ...l, status: "frozen" as const, account: p.account };
+    return { ...l, status: "ok" as const, account: p.account };
   }), [reviewed, checks]);
 
   const total = resolved.reduce((sum, l) => {
@@ -110,10 +111,12 @@ export default function Batch() {
         return;
       }
       const id = keccak256(toHex(batchId || `batch-${Date.now()}`));
+      setBatchHash(undefined);
       const h = await writeContractAsync({
         address: net.policy, abi: policyAbi, functionName: "executeBatch", args: [id, payouts],
       });
       setHash(h);
+      setBatchHash(h);
       setSentTotal(total);
       try {
         localStorage.setItem(`ledgerly:export:${net.key}`, JSON.stringify({
@@ -222,9 +225,9 @@ export default function Batch() {
             {allowance !== undefined && allowance < total && <span className="hint">First settle signs an ERC-20 approval, then a second transaction settles.</span>}
           </div>
           {error && <p className="form-error">{error}</p>}
-          {isSuccess && hash && (
+          {isSuccess && batchHash && hash && (
             <div className="notice notice-ok" style={{ marginBottom: 0 }}>
-              Batch settled. <a className="link mono" href={`${net.chain.blockExplorers?.default.url}/tx/${hash}`} target="_blank" rel="noreferrer">{hash.slice(0, 20)}…</a>
+              Batch settled. <a className="link mono" href={`${net.chain.blockExplorers?.default.url}/tx/${batchHash}`} target="_blank" rel="noreferrer">{batchHash.slice(0, 20)}…</a>
               {" · "}{fromUnits(sentTotal)} tUSD8 distributed. <a className="link" href="/proof">Reconcile →</a>
             </div>
           )}

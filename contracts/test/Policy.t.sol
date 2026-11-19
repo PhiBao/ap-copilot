@@ -38,8 +38,6 @@ contract PolicyTest is Test {
 
         token.mint(owner, SEED);
         token.mint(address(policy), SEED);
-        vm.prank(owner);
-        token.approve(address(policy), type(uint256).max);
 
         vm.prank(owner);
         policy.configure(500e6, 1_000e6, 5_000e6, uint64(block.timestamp) + 30 days);
@@ -52,14 +50,26 @@ contract PolicyTest is Test {
         p[2] = Policy.Payout({payeeId: ID_C, amount: 200e6, ref: "INV-003"});
     }
 
-    function test_batch_settles_to_registered_payees() public {
+    function test_batch_settles_from_the_policy_budget() public {
         uint256 beforeAlice = token.balanceOf(alice);
+        uint256 beforePolicy = token.balanceOf(address(policy));
         policy.executeBatch(keccak256("batch-1"), _payouts());
         assertEq(token.balanceOf(alice), beforeAlice + 100e6);
         assertEq(token.balanceOf(bob), 200e6);
         assertEq(token.balanceOf(carol), 200e6);
+        // The budget leaves the policy, not the owner's wallet.
+        assertEq(token.balanceOf(address(policy)), beforePolicy - 500e6);
+        assertEq(token.balanceOf(owner), SEED, "owner balance must be untouched");
         assertEq(policy.lifetimeSpent(), 500e6);
         assertTrue(policy.settled(keccak256("batch-1")));
+    }
+
+    function test_batch_refuses_when_budget_is_short() public {
+        Policy poor = new Policy(IERC20(address(token)), registry, owner);
+        vm.prank(owner);
+        poor.configure(0, 0, 0, uint64(block.timestamp) + 30 days);
+        vm.expectRevert(abi.encodeWithSelector(Policy.InsufficientBalance.selector, 0, 500e6));
+        poor.executeBatch(keccak256("batch-poor"), _payouts());
     }
 
     function test_replay_batch_reverts() public {
