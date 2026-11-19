@@ -1,0 +1,152 @@
+1
+00:00:00,050 --> 00:00:03,375
+A small team pays a dozen contractors every month.
+
+2
+00:00:03,375 --> 00:00:06,158
+The invoices arrive as files and email.
+
+3
+00:00:06,158 --> 00:00:13,980
+Someone copies wallet addresses into a spreadsheet, asks for approval
+in chat, and hopes nobody changed a bank detail.
+
+4
+00:00:13,980 --> 00:00:17,152
+Ledgerly turns that into one verified batch.
+
+5
+00:00:17,780 --> 00:00:19,443
+Late invoices are normal.
+
+6
+00:00:19,443 --> 00:00:27,445
+Twenty-nine percent of freelance invoices are paid late, and
+eighty-five percent of freelancers have been paid late at least once.
+
+7
+00:00:27,445 --> 00:00:29,339
+The rarer mistake is worse.
+
+8
+00:00:29,339 --> 00:00:36,067
+One wrong address, or one duplicate invoice, and the money is gone
+without a receipt a finance team can use.
+
+9
+00:00:36,689 --> 00:00:37,927
+This is the desk.
+
+10
+00:00:37,927 --> 00:00:44,655
+The rules are public: a cap per payment, a cap per day, a lifetime
+limit, and an expiry date.
+
+11
+00:00:44,655 --> 00:00:47,180
+The payee book is the part that matters.
+
+12
+00:00:47,180 --> 00:00:54,126
+One name maps to exactly one address, and an address change has to
+wait in public before it can take effect.
+
+13
+00:00:54,759 --> 00:00:57,957
+Paste the month's invoices, or upload the files.
+
+14
+00:00:57,957 --> 00:01:00,765
+Every line is checked before anything is paid.
+
+15
+00:01:00,765 --> 00:01:05,933
+These three references already settled in an earlier batch, so the
+batch is blocked.
+
+16
+00:01:05,933 --> 00:01:09,103
+No signature, no transaction, no money.
+
+17
+00:01:09,103 --> 00:01:12,918
+The same check stops a duplicate hiding inside one batch.
+
+18
+00:01:13,549 --> 00:01:16,567
+Changing an address is not a one-click event.
+
+19
+00:01:16,567 --> 00:01:20,819
+Choose the payee, enter the new address, and request the change.
+
+20
+00:01:20,819 --> 00:01:28,975
+The old address stays the only payable one until the public window
+closes, and a guardian can freeze the payee immediately.
+
+21
+00:01:28,975 --> 00:01:33,512
+A hijacked email cannot redirect a payment that is already staged.
+
+22
+00:01:34,140 --> 00:01:36,164
+The owner controls the limits.
+
+23
+00:01:36,164 --> 00:01:40,171
+Per payment, per day, lifetime, and an expiry date.
+
+24
+00:01:40,171 --> 00:01:47,002
+The balance is separate from the team's main wallet, so a compromised
+key can only lose what was deliberately funded.
+
+25
+00:01:47,002 --> 00:01:50,790
+Revocation is one action and it takes effect immediately.
+
+26
+00:01:51,420 --> 00:01:54,243
+The contracts are tested, not just deployed.
+
+27
+00:01:54,243 --> 00:02:04,295
+Thirty-nine tests cover caps, expiry, revocation, duplicate
+references, frozen payees, and a changed address that must not
+
+28
+00:02:04,295 --> 00:02:06,898
+One batch settled on the public testnet.
+
+29
+00:02:06,898 --> 00:02:11,717
+The policy spent exactly one-tenth of a dollar, and the transaction
+succeeded.
+
+30
+00:02:12,340 --> 00:02:19,893
+Every payout is an event on chain: the payee, the amount, the invoice
+reference, and the transaction.
+
+31
+00:02:19,893 --> 00:02:23,991
+The ledger is rebuilt from those events, not from the app's memory.
+
+32
+00:02:23,991 --> 00:02:29,107
+Export it, hand it to the bookkeeper, and every line can be checked
+against the chain.
+
+33
+00:02:29,710 --> 00:02:30,549
+Ledgerly.
+
+34
+00:02:30,549 --> 00:02:33,152
+Pay the invoices, not the impostor.
+
+35
+00:02:33,152 --> 00:02:37,830
+Live on Aevum testnet, open source, and ready for the next batch.
+
