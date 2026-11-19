@@ -50,10 +50,20 @@ contract PolicyTest is Test {
         p[2] = Policy.Payout({payeeId: ID_C, amount: 200e6, ref: "INV-003"});
     }
 
+    function _exec(bytes32 batchId, Policy.Payout[] memory p) internal {
+        vm.prank(owner);
+        policy.executeBatch(batchId, p);
+    }
+
+    function test_owner_only_settlement() public {
+        vm.expectRevert(abi.encodeWithSelector(Policy.NotOwner.selector));
+        policy.executeBatch(keccak256("batch-stranger"), _payouts());
+    }
+
     function test_batch_settles_from_the_policy_budget() public {
         uint256 beforeAlice = token.balanceOf(alice);
         uint256 beforePolicy = token.balanceOf(address(policy));
-        policy.executeBatch(keccak256("batch-1"), _payouts());
+        _exec(keccak256("batch-1"), _payouts());
         assertEq(token.balanceOf(alice), beforeAlice + 100e6);
         assertEq(token.balanceOf(bob), 200e6);
         assertEq(token.balanceOf(carol), 200e6);
@@ -69,13 +79,14 @@ contract PolicyTest is Test {
         vm.prank(owner);
         poor.configure(0, 0, 0, uint64(block.timestamp) + 30 days);
         vm.expectRevert(abi.encodeWithSelector(Policy.InsufficientBalance.selector, 0, 500e6));
+        vm.prank(owner);
         poor.executeBatch(keccak256("batch-poor"), _payouts());
     }
 
     function test_replay_batch_reverts() public {
-        policy.executeBatch(keccak256("batch-1"), _payouts());
+        _exec(keccak256("batch-1"), _payouts());
         vm.expectRevert(abi.encodeWithSelector(Policy.BatchAlreadySettled.selector, keccak256("batch-1")));
-        policy.executeBatch(keccak256("batch-1"), _payouts());
+        _exec(keccak256("batch-1"), _payouts());
     }
 
     function test_batch_total_is_capped_by_daily_cap() public {
@@ -84,14 +95,14 @@ contract PolicyTest is Test {
         big[1] = Policy.Payout({payeeId: ID_B, amount: 400e6, ref: "second"});
         big[2] = Policy.Payout({payeeId: ID_C, amount: 400e6, ref: "third"});
         vm.expectRevert(abi.encodeWithSelector(Policy.DailyCapExceeded.selector, uint256(1000e6), uint256(1200e6)));
-        policy.executeBatch(keccak256("batch-big"), big);
+        _exec(keccak256("batch-big"), big);
     }
 
     function test_per_payment_cap_blocks_large_line() public {
         Policy.Payout[] memory p = new Policy.Payout[](1);
         p[0] = Policy.Payout({payeeId: ID_A, amount: 501e6, ref: "over line cap"});
         vm.expectRevert(abi.encodeWithSelector(Policy.CapExceeded.selector, uint256(500e6), uint256(501e6)));
-        policy.executeBatch(keccak256("batch-line"), p);
+        _exec(keccak256("batch-line"), p);
     }
 
     function test_lifetime_cap_blocks_later_batch() public {
@@ -100,14 +111,25 @@ contract PolicyTest is Test {
         Policy.Payout[] memory p = new Policy.Payout[](1);
         p[0] = Policy.Payout({payeeId: ID_A, amount: 5_001e6, ref: "drain"});
         vm.expectRevert(abi.encodeWithSelector(Policy.LifetimeCapExceeded.selector, uint256(5000e6), uint256(5001e6)));
-        policy.executeBatch(keccak256("batch-drain"), p);
+        _exec(keccak256("batch-drain"), p);
+    }
+
+    function test_invoice_reference_cannot_settle_twice() public {
+        Policy.Payout[] memory first = new Policy.Payout[](1);
+        first[0] = Policy.Payout({payeeId: ID_A, amount: 10e6, ref: "INV-DUP"});
+        _exec(keccak256("batch-dup-1"), first);
+
+        Policy.Payout[] memory second = new Policy.Payout[](1);
+        second[0] = Policy.Payout({payeeId: ID_A, amount: 10e6, ref: "INV-DUP"});
+        vm.expectRevert(abi.encodeWithSelector(Policy.ReferenceAlreadySettled.selector, "INV-DUP"));
+        _exec(keccak256("batch-dup-2"), second);
     }
 
     function test_unregistered_payee_is_refused() public {
         Policy.Payout[] memory p = new Policy.Payout[](1);
         p[0] = Policy.Payout({payeeId: keccak256("payee:mallory"), amount: 1e6, ref: "bad"});
         vm.expectRevert(abi.encodeWithSelector(Policy.PayeeNotActive.selector, keccak256("payee:mallory")));
-        policy.executeBatch(keccak256("batch-bad"), p);
+        _exec(keccak256("batch-bad"), p);
     }
 
     function test_frozen_payee_is_refused() public {
@@ -115,7 +137,7 @@ contract PolicyTest is Test {
         Policy.Payout[] memory p = new Policy.Payout[](1);
         p[0] = Policy.Payout({payeeId: ID_A, amount: 1e6, ref: "frozen"});
         vm.expectRevert(abi.encodeWithSelector(Policy.PayeeNotActive.selector, ID_A));
-        policy.executeBatch(keccak256("batch-frozen"), p);
+        _exec(keccak256("batch-frozen"), p);
     }
 
     function test_pending_change_does_not_redirect_payment() public {
@@ -123,7 +145,7 @@ contract PolicyTest is Test {
         registry.requestChange(ID_A, attacker, "hijacked");
         Policy.Payout[] memory p = new Policy.Payout[](1);
         p[0] = Policy.Payout({payeeId: ID_A, amount: 100e6, ref: "INV-001"});
-        policy.executeBatch(keccak256("batch-hijack"), p);
+        _exec(keccak256("batch-hijack"), p);
         assertEq(token.balanceOf(alice), 100e6, "must still pay the verified address");
         assertEq(token.balanceOf(attacker), 0);
     }
@@ -132,7 +154,7 @@ contract PolicyTest is Test {
         vm.prank(owner);
         policy.revoke();
         vm.expectRevert(abi.encodeWithSelector(Policy.Revoked.selector));
-        policy.executeBatch(keccak256("batch-after-revoke"), _payouts());
+        _exec(keccak256("batch-after-revoke"), _payouts());
     }
 
     function test_expiry_stops_settlement() public {
@@ -140,7 +162,7 @@ contract PolicyTest is Test {
         vm.prank(owner);
         policy.configure(0, 0, 0, uint64(block.timestamp) - 1);
         vm.expectRevert(abi.encodeWithSelector(Policy.Expired.selector, uint64(block.timestamp) - 1));
-        policy.executeBatch(keccak256("batch-expired"), _payouts());
+        _exec(keccak256("batch-expired"), _payouts());
     }
 
     function test_only_owner_can_configure_or_revoke() public {
@@ -156,18 +178,18 @@ contract PolicyTest is Test {
         Policy.Payout[] memory p = new Policy.Payout[](1);
         p[0] = Policy.Payout({payeeId: ID_A, amount: 0, ref: "zero"});
         vm.expectRevert(abi.encodeWithSelector(Policy.ZeroAmount.selector));
-        policy.executeBatch(keccak256("batch-zero"), p);
+        _exec(keccak256("batch-zero"), p);
     }
 
     function test_empty_batch_reverts() public {
         Policy.Payout[] memory p = new Policy.Payout[](0);
         vm.expectRevert(abi.encodeWithSelector(Policy.EmptyBatch.selector));
-        policy.executeBatch(keccak256("batch-empty"), p);
+        _exec(keccak256("batch-empty"), p);
     }
 
     function test_remaining_caps_track_spend() public {
         assertEq(policy.remainingDaily(), 1_000e6);
-        policy.executeBatch(keccak256("batch-1"), _payouts());
+        _exec(keccak256("batch-1"), _payouts());
         assertEq(policy.remainingDaily(), 500e6);
         assertEq(policy.remainingLifetime(), 4_500e6);
     }

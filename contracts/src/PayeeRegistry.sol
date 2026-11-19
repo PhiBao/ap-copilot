@@ -42,6 +42,7 @@ contract PayeeRegistry {
     event ChangeApplied(bytes32 indexed payeeId, address indexed account, uint64 at);
     event PayeeFrozen(bytes32 indexed payeeId, address indexed account, uint64 at);
     event PayeeUnfrozen(bytes32 indexed payeeId, address indexed account, uint64 at);
+    event ChangeCancelled(bytes32 indexed payeeId, address indexed account, uint64 at);
     event PayeeRemoved(bytes32 indexed payeeId, address indexed account, uint64 at);
 
     error ZeroAddress();
@@ -176,6 +177,7 @@ contract PayeeRegistry {
         p.changeRequestedAt = 0;
         p.pendingAccount = address(0);
         p.pendingLabel = "";
+        emit ChangeCancelled(payeeId, p.account, uint64(block.timestamp));
     }
 
     // ------------------------------------------------------------------ disputes

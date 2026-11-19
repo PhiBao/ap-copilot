@@ -70,6 +70,8 @@ contract Policy is EIP712 {
 
     PolicyState public state;
     mapping(bytes32 batchId => bool) public settled;
+    /// @notice One invoice reference can only ever settle once, across all batches.
+    mapping(bytes32 refHash => bool) public settledReference;
 
     bytes32 public constant BATCH_TYPEHASH =
         keccak256("Batch(address owner,bytes32 batchId,bytes32 payoutHash,uint256 nonce,uint64 validUntil)");
@@ -99,6 +101,7 @@ contract Policy is EIP712 {
     error TransferFailed();
     error NothingToWithdraw();
     error InsufficientBalance(uint256 available, uint256 needed);
+    error ReferenceAlreadySettled(string ref);
 
     constructor(IERC20 token_, PayeeRegistry registry_, address owner_)
         EIP712("APCopilotPolicy", "1")
@@ -151,8 +154,10 @@ contract Policy is EIP712 {
 
     // -------------------------------------------------------------- settlement
 
-    /// @notice Settle a batch from the owner's deposited balance. Owner pre-approves.
-    function executeBatch(bytes32 batchId, Payout[] calldata payouts) external {
+    /// @notice Settle a batch from the owner's deposited balance. Only the owner can do this:
+    ///         approval is a contract property, not a UI convention. Anyone can settle a batch
+    ///         the owner signed via `executeBatchSigned`.
+    function executeBatch(bytes32 batchId, Payout[] calldata payouts) external onlyOwner {
         _settle(batchId, payouts);
     }
 
@@ -271,6 +276,8 @@ contract Policy is EIP712 {
             if (p.payeeId == bytes32(0)) revert ZeroId();
             // The registry is the gate: only an active verified payee can be paid.
             if (!registry.isActive(p.payeeId)) revert PayeeNotActive(p.payeeId);
+            bytes32 refHash = keccak256(bytes(p.ref));
+            if (settledReference[refHash]) revert ReferenceAlreadySettled(p.ref);
             if (state.perPaymentCap != 0 && p.amount > state.perPaymentCap) {
                 revert CapExceeded(state.perPaymentCap, p.amount);
             }
@@ -295,6 +302,7 @@ contract Policy is EIP712 {
         }
         state.spentToday += p.amount;
         state.lifetimeSpent += p.amount;
+        settledReference[keccak256(bytes(p.ref))] = true;
         emit PayoutSettled(batchId, p.payeeId, to, p.amount, p.ref);
     }
 
