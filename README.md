@@ -80,16 +80,15 @@ This is not "AI + a database". The novel unit is a **human-approved, contract-en
 
 ![Architecture: what enforces the payee decision](docs/architecture.svg)
 
-```
-Browser (Next.js) ── viem/wagmi ── Aevum RPC (44005)
-        │                     │
-        │ read payee()/state() │ write register/configure/deposit/executeBatch
-        ▼                     ▼
-   PayeeRegistry          Policy (funded budget)
-   1 id → 1 address       caps · expiry · revoke · batch replay guard
-        ▲                     │
-        └── activeAccount() ──┘   (resolved at settlement time)
-```
+| Layer | Responsibility | Where |
+| --- | --- | --- |
+| Browser (Next.js) | invoice intake, payee review, one approval, reconciliation | `web/src/app/` |
+| PayeeRegistry | one payee id → one active address, delayed changes, guardian freeze | `contracts/src/PayeeRegistry.sol` |
+| Policy | funded budget, caps, expiry, revoke, duplicate guard, settlement | `contracts/src/Policy.sol` |
+| QDay Aevum | tUSD8 settlement on chain 44005; `PayoutSettled` events are the audit trail | RPC `rpc-test.qday.info` |
+
+**Settlement path:** invoice lines → on-chain payee lookup → staged batch → owner calls `executeBatch` → `Policy` resolves each destination via the registry, checks every cap and duplicate, and spends its own tUSD8 budget → `PayoutSettled` events → reconciliation CSV.
+
 
 - **Backend decision:** none. The product is a frontend talking directly to public Aevum contracts via viem/wagmi. A backend is not needed: there are no secrets to protect at runtime, no user-specific persistence (the payee book and events are on-chain), and no background jobs. The event scanner runs client-side. This follows `AGENTS.md` §9 — the simplest architecture that satisfies the requirements.
 - **Runtime:** TypeScript/Node 22, Next.js 16, React 19, viem/wagmi, Foundry/Solidity 0.8.24. EVM target **Shanghai** (Aevum rejects Cancun opcodes).
