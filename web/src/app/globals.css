@@ -101,17 +101,6 @@ h3 { font-size: 13px; font-weight: 600; letter-spacing: 0.02em; text-transform: 
 
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
 .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
-@media (max-width: 860px) {
-  .grid-2, .grid-3 { grid-template-columns: 1fr; }
-  .header-inner { height: auto; flex-wrap: wrap; padding: 10px 16px; gap: 10px; }
-  .main-nav { order: 3; width: 100%; margin-left: 0; overflow-x: auto; padding-bottom: 2px; }
-  .nav-link { white-space: nowrap; }
-  .header-actions { margin-left: auto; }
-  .shell { padding: 28px 16px 64px; }
-  .steps { flex-wrap: nowrap; overflow-x: auto; }
-  .step { min-width: 150px; }
-  .hero { gap: 28px; }
-}
 
 /* Buttons */
 .btn {
@@ -215,3 +204,19 @@ td input:focus { border-color: var(--copper); background: #fffdf8; outline: none
 /* Footer */
 .site-footer { border-top: 1px solid var(--rule); padding: 24px 28px; font-size: 12px; color: var(--ink-faint); }
 .footer-inner { max-width: 1180px; margin: 0 auto; display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+
+/* Mobile overrides last so they win over base rules. */
+@media (max-width: 860px) {
+  .grid-2, .grid-3 { grid-template-columns: 1fr; }
+  .header-inner { height: auto; flex-wrap: wrap; padding: 10px 16px; gap: 10px; }
+  .main-nav { order: 3; width: 100%; margin-left: 0; overflow-x: auto; padding-bottom: 2px; }
+  .nav-link { white-space: nowrap; }
+  .header-actions { margin-left: auto; }
+  .shell { padding: 28px 16px 64px; }
+  .steps { flex-wrap: nowrap; overflow-x: auto; }
+  .step { min-width: 150px; }
+  .hero { gap: 28px; }
+  .header-actions button { white-space: nowrap; font-size: 12px; padding: 8px 10px; }
+  .header-actions { gap: 8px; }
+  .network-select select { padding: 6px; }
+}
