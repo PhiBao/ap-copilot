@@ -127,7 +127,9 @@ export default function Admin() {
 
       {!isOwner && (
         <div className="notice">
-          Read-only. Connected wallet is not the desk owner ({owner?.slice(0, 10)}…). Switch wallets to change anything.
+          {isConnected
+            ? `Read-only. Connected wallet is not the desk owner (${owner?.slice(0, 10)}…). Switch wallets to change anything.`
+            : "Read-only. Connect the desk owner wallet to change caps, budget or revocation."}
         </div>
       )}
 

@@ -59,7 +59,7 @@ This is not "AI + a database". The novel unit is a **human-approved, contract-en
 
 - Document intake proposes; a deterministic, on-chain payee lookup disposes. An LLM can later improve extraction without ever gaining payment authority.
 - The destination address is resolved by the contract **at settlement time** from the payee id, so a staged batch cannot be rerouted by a changed address.
-- Every invoice reference is single-use across all batches, and duplicate references inside one batch are refused by the contract.
+- An invoice reference can settle only once across all batches; the review also refuses a repeated reference inside one batch before anything is signed.
 - The accounting export is generated from actual chain events, not from the UI's optimism.
 - Intake accepts CSV, TSV, JSON, labelled email text and text-based PDFs entirely client-side; no document leaves the browser.
 
@@ -123,7 +123,7 @@ To deploy your own instance, use the gated `/deploy` page with a funded browser 
 | Pending change cannot redirect payment | Real, tested | `test_pending_change_does_not_redirect_payment`, live fork probe |
 | Frozen payee blocks payment | Real, tested | `test_frozen_payee_is_refused`, live fork probe |
 | Owner-only settlement | Real, tested | `test_owner_only_settlement` |
-| Duplicate invoice reference refused | Real, tested | `test_invoice_reference_cannot_settle_twice`, live UI block |
+| Duplicate invoice reference refused | Real, live | `test_invoice_reference_cannot_settle_twice`, live UI block on the demo desk |
 | Caps/expiry/revoke | Real, tested | Foundry suite (38 tests) |
 | Gasless EIP-3009 settlement | Real, tested | `test_gasless_batch_with_authorizations` |
 | Multi-format intake (CSV/TSV/JSON/email/PDF) | Real, client-side | `web/src/lib/intake.ts`, `web/src/lib/pdf.ts`; verified with a generated invoice PDF |
