@@ -11,6 +11,9 @@ import { payeeRegistryAbi, policyAbi, erc20Abi, TUSD8 } from "@/lib/contracts";
 import { PAYEEREGISTRY_BYTECODE } from "@/lib/payeeregistry-bytecode";
 import { POLICY_BYTECODE } from "@/lib/policy-bytecode";
 import { deployEnabled } from "@/lib/env";
+import { clearDeployIntent, readDeployIntent, saveDeployIntent, singleWalletRequest } from "@/lib/wallet";
+import { useEffect } from "react";
+import { useNetwork } from "@/lib/network";
 
 export default function Deploy() {
   const { address } = useAccount();
@@ -20,6 +23,13 @@ export default function Deploy() {
   const [policy, setPolicy] = useState("");
   const [step, setStep] = useState("idle");
   const [error, setError] = useState("");
+  const { net } = useNetwork();
+  const [pending, setPending] = useState<{ kind: "registry" | "policy"; hash: `0x${string}` } | null>(null);
+
+  useEffect(() => {
+    const i = readDeployIntent(net.chain.id);
+    if (i) setPending({ kind: i.kind, hash: i.hash });
+  }, [net.chain.id]);
 
   if (!deployEnabled) {
     return <main className="shell"><h1>Not available.</h1><p className="muted">Deployment utility is disabled.</p></main>;
@@ -29,9 +39,11 @@ export default function Deploy() {
     setError("");
     if (!address) { setError("Connect a wallet first."); return; }
     try {
-      const h = which === "registry"
-        ? await deployContractAsync({ abi: payeeRegistryAbi, bytecode: PAYEEREGISTRY_BYTECODE, args: [3600n, address, address] })
-        : await deployContractAsync({ abi: policyAbi, bytecode: POLICY_BYTECODE, args: [TUSD8, isAddress(registry) ? registry : TUSD8, address] });
+      const h = await singleWalletRequest(() => which === "registry"
+        ? deployContractAsync({ abi: payeeRegistryAbi, bytecode: PAYEEREGISTRY_BYTECODE, args: [3600n, address, address] })
+        : deployContractAsync({ abi: policyAbi, bytecode: POLICY_BYTECODE, args: [TUSD8, isAddress(registry) ? registry : TUSD8, address] }));
+      setPending({ kind: which, hash: h });
+      saveDeployIntent(net.chain.id, { kind: which, hash: h, at: Date.now() });
       setStep(`${which} deploy tx: ${h.slice(0, 18)}… — copy the contract address from the explorer`);
     } catch (e) { setError((e as Error).message.slice(0, 220)); }
   }
@@ -81,13 +93,21 @@ export default function Deploy() {
         <p className="lede">Connected as {address ?? "none"}. Every action signs in your wallet; no key leaves the extension.</p>
       </div>
       <div className="panel panel-pad">
-        <button className="btn" onClick={() => deploy("registry")} disabled={!address || deploying}>1 · Deploy PayeeRegistry</button>
+        <button className="btn" onClick={() => deploy("registry")} disabled={!address || deploying || !!pending}>1 · Deploy PayeeRegistry</button>
         {field("PayeeRegistry address", registry, setRegistry)}
         <div className="spacer" />
-        <button className="btn" onClick={() => deploy("policy")} disabled={!address || !isAddress(registry) || deploying}>2 · Deploy Policy</button>
+        <button className="btn" onClick={() => deploy("policy")} disabled={!address || !isAddress(registry) || deploying || !!pending}>2 · Deploy Policy</button>
         {field("Policy address", policy, setPolicy)}
         <div className="spacer" />
         <button className="btn btn-copper" onClick={seed} disabled={!isAddress(registry) || !isAddress(policy) || writing}>3 · Configure caps and deposit 0.1 tUSD8</button>
+        {pending && (
+          <div className="notice" style={{ fontSize: 12 }}>
+            Pending deploy <span className="mono">{pending.hash.slice(0, 14)}…</span>{" "}
+            <button className="link" style={{ background: "none", border: 0, padding: 0 }} onClick={() => { clearDeployIntent(net.chain.id); setPending(null); }}>
+              Clear
+            </button>
+          </div>
+        )}
         <p className="hint">Step: {step}</p>
         {error && <p className="form-error">{error}</p>}
         <div className="notice">

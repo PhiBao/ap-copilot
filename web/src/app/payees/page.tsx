@@ -8,6 +8,7 @@ import { listRegisteredPayeeIds } from "@/lib/payee-events";
 import { useNetwork } from "@/lib/network";
 import { useDesk } from "@/lib/desk";
 import { explainError } from "@/lib/errors";
+import { singleWalletRequest } from "@/lib/wallet";
 
 interface PayeeRow {
   id: `0x${string}`;
@@ -53,13 +54,13 @@ export default function Payees() {
 
   useEffect(() => {
     if (!publicClient || !registry) return;
-    listRegisteredPayeeIds(publicClient as never, registry, desk?.fromBlock ?? net.deployBlock ?? 0n)
+    listRegisteredPayeeIds(publicClient as never, registry, desk?.registryFromBlock ?? desk?.fromBlock ?? net.deployBlock ?? 0n)
       .then((onchain) => {
         setKnownIds((prev) => [...new Set([...onchain, ...prev])]);
         try { localStorage.setItem(`ledgerly:payees:${net.key}`, JSON.stringify(onchain)); } catch { /* ignore */ }
       })
       .catch(() => {});
-  }, [publicClient, registry, desk?.fromBlock, net.deployBlock, net.key]);
+  }, [publicClient, registry, desk?.registryFromBlock, desk?.fromBlock, net.deployBlock, net.key]);
 
   useEffect(() => {
     try {
@@ -113,7 +114,7 @@ export default function Payees() {
 
   async function send(fn: () => Promise<`0x${string}`>) {
     setError("");
-    try { setHash(await fn()); } catch (e) { setError(explainError(e)); }
+    try { setHash(await singleWalletRequest(fn)); } catch (e) { setError(explainError(e)); }
   }
 
   function register() {

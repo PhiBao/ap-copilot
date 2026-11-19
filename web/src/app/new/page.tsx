@@ -8,6 +8,7 @@ import { payeeRegistryAbi, policyAbi, erc20Abi, TUSD8 } from "@/lib/contracts";
 import { PAYEEREGISTRY_BYTECODE } from "@/lib/payeeregistry-bytecode";
 import { POLICY_BYTECODE } from "@/lib/policy-bytecode";
 import { useDesk, saveDesk } from "@/lib/desk";
+import { clearDeployIntent, readDeployIntent, saveDeployIntent, singleWalletRequest } from "@/lib/wallet";
 import { useNetwork } from "@/lib/network";
 
 /**
@@ -30,6 +31,25 @@ export default function NewDesk() {
   const [amount, setAmount] = useState("0.1");
 
   const { data: receipt } = useWaitForTransactionReceipt({ hash: deployHash });
+  const addrKey = `ledgerly:deploy:addr:${net.chain.id}`;
+
+  // Restore a deploy that was already sent, or addresses already deployed, after a reload.
+  useEffect(() => {
+    const intent = readDeployIntent(net.chain.id);
+    if (intent) {
+      setDeployHash(intent.hash);
+      setDeployKind(intent.kind);
+      setError("A deployment is already pending. Waiting for it instead of sending another request.");
+    }
+    try {
+      const raw = localStorage.getItem(addrKey);
+      if (raw) {
+        const a = JSON.parse(raw) as { registry?: string; policy?: string };
+        if (a.registry) setRegistry(a.registry);
+        if (a.policy) setPolicy(a.policy);
+      }
+    } catch { /* ignore */ }
+  }, [net.chain.id, addrKey]);
 
   useEffect(() => {
     const deployed = receipt?.contractAddress;
@@ -38,8 +58,14 @@ export default function NewDesk() {
     else setPolicy(deployed);
     setDeployKind(null);
     setDeployHash(undefined);
+    clearDeployIntent(net.chain.id);
     setError("");
-  }, [receipt, deployKind]);
+  }, [receipt, deployKind, net.chain.id]);
+
+  useEffect(() => {
+    if (!registry && !policy) return;
+    try { localStorage.setItem(addrKey, JSON.stringify({ registry, policy })); } catch { /* ignore */ }
+  }, [registry, policy, addrKey]);
 
   const { data: balance } = useReadContract({
     address: TUSD8, abi: erc20Abi, functionName: "balanceOf",
@@ -50,30 +76,40 @@ export default function NewDesk() {
   function setHashPending(h: `0x${string}`, kind: "registry" | "policy") {
     setDeployHash(h);
     setDeployKind(kind);
+    saveDeployIntent(net.chain.id, { kind, hash: h, at: Date.now() });
     setError(kind === "registry" ? "Deploying registry… the address fills in when the transaction confirms." : "Deploying policy… the address fills in when the transaction confirms.");
   }
 
+  function clearPending() {
+    clearDeployIntent(net.chain.id);
+    setDeployHash(undefined);
+    setDeployKind(null);
+    setError("Pending deploy cleared. Only reject it in your wallet if it is still open.");
+  }
+
   async function deployRegistry() {
+    if (deployHash) { setError("A deployment is already waiting for confirmation."); return; }
     setError(""); setStep("registry");
     try {
-      const h = await deployContractAsync({
+      const h = await singleWalletRequest(() => deployContractAsync({
         abi: payeeRegistryAbi, bytecode: PAYEEREGISTRY_BYTECODE,
         // Owner and guardian both start as the connected wallet; split them later if you want.
         args: [3600n, address!, address!],
-      });
+      }));
       setHashPending(h, "registry");
       setStep("idle");
     } catch (e) { setStep("idle"); setError((e as Error).message.slice(0, 240)); }
   }
 
   async function deployPolicy() {
+    if (deployHash) { setError("A deployment is already waiting for confirmation."); return; }
     setError(""); setStep("policy");
     if (!registry.startsWith("0x") || registry.length !== 42) { setStep("idle"); setError("Paste the deployed registry address first."); return; }
     try {
-      const h = await deployContractAsync({
+      const h = await singleWalletRequest(() => deployContractAsync({
         abi: policyAbi, bytecode: POLICY_BYTECODE,
         args: [TUSD8, registry as Address, address!],
-      });
+      }));
       setHashPending(h, "policy");
       setStep("idle");
     } catch (e) { setStep("idle"); setError((e as Error).message.slice(0, 240)); }
@@ -83,15 +119,17 @@ export default function NewDesk() {
     setError(""); setStep("funding");
     if (!registry.startsWith("0x") || !policy.startsWith("0x")) { setStep("idle"); setError("Both addresses are required."); return; }
     try {
-      // Sensible starting limits for a small team; change them any time on the Desk admin page.
-      const expiry = BigInt(Math.floor(Date.now() / 1000) + 90 * 86400);
-      await writeContractAsync({
-        address: policy as Address, abi: policyAbi, functionName: "configure",
-        args: [parseUnits("500", 6), parseUnits("1000", 6), parseUnits("5000", 6), expiry],
+      await singleWalletRequest(async () => {
+        // Sensible starting limits for a small team; change them any time on the Desk admin page.
+        const expiry = BigInt(Math.floor(Date.now() / 1000) + 90 * 86400);
+        await writeContractAsync({
+          address: policy as Address, abi: policyAbi, functionName: "configure",
+          args: [parseUnits("500", 6), parseUnits("1000", 6), parseUnits("5000", 6), expiry],
+        });
+        const units = parseUnits(amount || "0.1", 6);
+        await writeContractAsync({ address: TUSD8, abi: erc20Abi, functionName: "approve", args: [policy as Address, units] });
+        await writeContractAsync({ address: policy as Address, abi: policyAbi, functionName: "deposit", args: [units] });
       });
-      const units = parseUnits(amount || "0.1", 6);
-      await writeContractAsync({ address: TUSD8, abi: erc20Abi, functionName: "approve", args: [policy as Address, units] });
-      await writeContractAsync({ address: policy as Address, abi: policyAbi, functionName: "deposit", args: [units] });
       const d = { registry: registry as Address, policy: policy as Address, label: "My desk", fromBlock: undefined };
       saveDesk(net.chain.id, d);
       selectDesk(d);
@@ -104,10 +142,10 @@ export default function NewDesk() {
     if (!address || !registry.startsWith("0x")) return;
     try {
       const label = "Studio North Ltd";
-      await writeContractAsync({
+      await singleWalletRequest(() => writeContractAsync({
         address: registry as Address, abi: payeeRegistryAbi, functionName: "register",
         args: [keccak256(toHex(label)), "0x3333333333333333333333333333333333333333", label],
-      });
+      }));
     } catch (e) { setError((e as Error).message.slice(0, 200)); }
   }
 
@@ -126,12 +164,20 @@ export default function NewDesk() {
         <div className="panel">
           <div className="panel-head"><span className="panel-title">01 · Deploy your contracts</span><span className={`badge ${isConnected ? "badge-ok" : "badge-warn"}`}>{isConnected ? "Wallet connected" : "Connect a wallet"}</span></div>
           <div className="panel-pad">
-            <button className="btn" onClick={deployRegistry} disabled={!isConnected || deploying}>Deploy payee registry</button>
+            <button className="btn" onClick={deployRegistry} disabled={!isConnected || deploying || !!deployHash}>Deploy payee registry</button>
+            {deployHash && (
+              <div className="notice" style={{ fontSize: 12 }}>
+                Waiting for deploy <span className="mono">{deployHash.slice(0, 12)}…</span>{" "}
+                <button className="link" style={{ background: "none", border: 0, padding: 0 }} onClick={clearPending}>
+                  Clear pending request
+                </button>
+              </div>
+            )}
             <label className="field" style={{ marginTop: 14 }}>
               <span className="field-label">Registry address</span>
               <input className="mono" value={registry} onChange={(e) => setRegistry(e.target.value)} placeholder="0x…" />
             </label>
-            <button className="btn" onClick={deployPolicy} disabled={!registry || deploying}>Deploy policy</button>
+            <button className="btn" onClick={deployPolicy} disabled={!registry || deploying || !!deployHash}>Deploy policy</button>
             <label className="field" style={{ marginTop: 14 }}>
               <span className="field-label">Policy address</span>
               <input className="mono" value={policy} onChange={(e) => setPolicy(e.target.value)} placeholder="0x…" />
@@ -153,10 +199,10 @@ export default function NewDesk() {
               <input value={amount} onChange={(e) => setAmount(e.target.value)} />
               <span className="hint">Caps start at 500 / 1,000 / 5,000 tUSD8. Change them on the admin page.</span>
             </label>
-            <button className="btn btn-copper" onClick={activate} disabled={!isConnected || writing || !registry || !policy}>
+            <button className="btn btn-copper" onClick={activate} disabled={!isConnected || writing || !!deployHash || !registry || !policy}>
               {step === "funding" ? "Signing…" : "Configure, approve and fund"}
             </button>
-            <button className="btn btn-secondary" onClick={registerDemoPayee} disabled={!registry || writing} style={{ marginLeft: 8 }}>
+            <button className="btn btn-secondary" onClick={registerDemoPayee} disabled={!registry || writing || !!deployHash} style={{ marginLeft: 8 }}>
               Add a demo payee
             </button>
             {error && <p className="form-error">{error}</p>}

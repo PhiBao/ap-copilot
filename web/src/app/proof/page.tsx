@@ -80,10 +80,11 @@ export default function Proof() {
     try {
       if (!publicClient || !desk) throw new Error("No desk selected.");
       const start = desk.fromBlock ?? net.deployBlock ?? 0n;
+      const payeeStart = desk.registryFromBlock ?? start;
 
       const [payoutLogs, payeeLogs] = await Promise.all([
         scanChunked(publicClient as never, desk.policy, payoutEvent, start) as unknown as Promise<Array<{ args: { batchId: string; payeeId: string; to: Address; amount: bigint; ref: string }; transactionHash: string; blockNumber: bigint }>>,
-        scanChunked(publicClient as never, desk.registry, payeeEvent, start) as unknown as Promise<Array<{ args: { payeeId: string; label: string } }>>,
+        scanChunked(publicClient as never, desk.registry, payeeEvent, payeeStart) as unknown as Promise<Array<{ args: { payeeId: string; label: string } }>>,
       ]);
 
       const labelMap: Record<string, string> = {};

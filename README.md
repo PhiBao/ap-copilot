@@ -20,12 +20,12 @@
 | Artifact | Link |
 | --- | --- |
 | PayeeRegistry contract | https://explorer-test.qday.info/address/0x5d7f15aa513cd0ae8aac81580e5b3e4758f985a4 |
-| Policy contract | https://explorer-test.qday.info/address/0x4eba7ad4e07f0d7eb053b84f0e64f6a5d9549312 |
-| Live batch settlement (0.1 tUSD8 to three verified payees) | https://explorer-test.qday.info/tx/0x43b8563675ad2694ffe7007608f8d94458d3bd1c2d2e7351001fe56104414d9a |
+| Policy contract | https://explorer-test.qday.info/address/0xaa1e94c690751ff584cefa5f67129f4c6f88730e |
+| Live batch settlement (0.1 tUSD8 to three verified payees) | https://explorer-test.qday.info/tx/0x4931df22d7999e946ebcb32849dd15819cafc5f7b7519a7476764b69eeb3400d |
 | tUSD8 token (official test stablecoin) | https://explorer-test.qday.info/address/0x456569838f1d43009A91ebA4263147Afd7233483 |
-| Policy deploy transaction (v2) | https://explorer-test.qday.info/tx/0x9e154cf7155c7faf8a75018240063c9004755984ac77c3ae3debbfa63f3f795e |
+| Policy deploy transaction | https://explorer-test.qday.info/tx/0x1f1253b37c16b3a6d0f63fe62dfe03b439e5fdda4c7096956b8cf9c5dfe3efbe |
 
-The current Policy was deployed at block `3552403` from contract source commit `3ab57f2`. The repository head also contains an intra-batch duplicate guard (`87ee96f`, tested) queued for the next policy deployment. Read `lifetimeSpent()` and scan `PayoutSettled` events on the explorer; compare them with the CSV exported from the Proof page. No trust in our UI is required.
+The current Policy was deployed at block `3556589` from contract source commit `87ee96f`. It enforces owner-only settlement, cross-batch and intra-batch duplicate-reference guards. Read `lifetimeSpent()` and scan `PayoutSettled` events on the explorer; compare them with the CSV exported from the Proof page. No trust in our UI is required.
 
 ---
 

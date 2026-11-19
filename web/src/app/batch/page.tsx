@@ -9,6 +9,7 @@ import { useDesk } from "@/lib/desk";
 import { parseInvoices, toUnits, fromUnits, type InvoiceLine } from "@/lib/intake";
 import { explainError } from "@/lib/errors";
 import { extractPdfText } from "@/lib/pdf";
+import { singleWalletRequest } from "@/lib/wallet";
 import { Steps } from "@/components/Steps";
 
 const SAMPLE = `# payee, amount, reference
@@ -159,10 +160,10 @@ export default function Batch() {
     if (!registry) return;
     if (!/^0x[0-9a-fA-F]{40}$/.test(draft)) { setError("Enter the payee's 0x address to register it."); return; }
     try {
-      const h = await writeContractAsync({
+      const h = await singleWalletRequest(() => writeContractAsync({
         address: registry, abi: payeeRegistryAbi, functionName: "register",
         args: [line.id32, draft as Address, line.payeeLabel.trim()],
-      });
+      }));
       setHash(h);
       await refetchChecks();
     } catch (e) { setError(explainError(e)); }
@@ -180,9 +181,9 @@ export default function Batch() {
     try {
       const id = keccak256(toHex(batchId || `batch-${Date.now()}`));
       setBatchHash(undefined);
-      const h = await writeContractAsync({
+      const h = await singleWalletRequest(() => writeContractAsync({
         address: policy, abi: policyAbi, functionName: "executeBatch", args: [id, payouts],
-      });
+      }));
       setHash(h);
       setBatchHash(h);
       setSentTotal(total);

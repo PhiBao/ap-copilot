@@ -7,6 +7,7 @@ import { formatUnits, parseUnits } from "viem";
 import { policyAbi, erc20Abi, TUSD8 } from "@/lib/contracts";
 import { useDesk } from "@/lib/desk";
 import { explainError } from "@/lib/errors";
+import { singleWalletRequest } from "@/lib/wallet";
 import { fromUnits } from "@/lib/intake";
 
 function toDateInput(ts: bigint | undefined): string {
@@ -75,7 +76,7 @@ export default function Admin() {
   async function run(fn: () => Promise<`0x${string}`>, message: string) {
     setError(""); setOk("");
     try {
-      const h = await fn();
+      const h = await singleWalletRequest(fn);
       setHash(h);
       setOk(`${message} Sent ${h.slice(0, 12)}…`);
     } catch (e) { setError(explainError(e)); }
