@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Address } from "viem";
 import { useNetwork } from "./network";
 
@@ -54,17 +54,21 @@ export function useDesk() {
 
   useEffect(() => { setOverride(read(net.chain.id)); }, [net.chain.id]);
 
-  const envDesk: Desk | null = net.registry && net.policy
-    ? {
-        registry: net.registry,
-        policy: net.policy,
-        label: "QDay demo desk",
-        fromBlock: net.deployBlock,
-        registryFromBlock: net.registryDeployBlock,
-      }
-    : null;
+  const envDesk: Desk | null = useMemo(
+    () => (net.registry && net.policy
+      ? {
+          registry: net.registry,
+          policy: net.policy,
+          label: "QDay demo desk",
+          fromBlock: net.deployBlock,
+          registryFromBlock: net.registryDeployBlock,
+        }
+      : null),
+    [net.registry, net.policy, net.deployBlock, net.registryDeployBlock]
+  );
 
-  const desk = override ?? envDesk;
+  // A stable object: consumers use it in effect dependencies.
+  const desk = useMemo(() => override ?? envDesk, [override, envDesk]);
 
   const use = useCallback((d: Desk | null) => {
     if (d) saveDesk(net.chain.id, d);
@@ -72,5 +76,5 @@ export function useDesk() {
     setOverride(d);
   }, [net.chain.id]);
 
-  return { desk, envDesk, use };
+  return useMemo(() => ({ desk, envDesk, use }), [desk, envDesk, use]);
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePublicClient } from "wagmi";
 import { parseAbiItem, type Address } from "viem";
 import { TUSD8 } from "@/lib/contracts";
@@ -53,9 +53,9 @@ async function scanChunked<T>(
     ranges.push([from, from + 999n > latest ? latest : from + 999n]);
   }
   const out: T[] = [];
-  // Aevum's RPC handles a handful of parallel range queries; 6 keeps it polite.
-  for (let i = 0; i < ranges.length; i += 6) {
-    const slice = ranges.slice(i, i + 6);
+  // Aevum's RPC handles a handful of parallel range queries; 4 keeps it polite.
+  for (let i = 0; i < ranges.length; i += 4) {
+    const slice = ranges.slice(i, i + 4);
     const results = await Promise.all(
       slice.map(([fromBlock, toBlock]) => publicClient.getLogs({ address, event, fromBlock, toBlock } as never))
     );
@@ -74,23 +74,42 @@ export default function Proof() {
   const [loading, setLoading] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState("");
+  const inFlight = useRef(false);
+
+  // Primitive dependencies keep the refresh callback stable across renders.
+  const registry = desk?.registry;
+  const policy = desk?.policy;
+  const fromBlock = desk?.fromBlock;
+  const registryFromBlock = desk?.registryFromBlock;
+  const labelKey = registry ? `ledgerly:labels:${net.key}:${registry.toLowerCase()}` : "";
 
   const refresh = useCallback(async () => {
+    if (inFlight.current) return;            // one scan at a time; no request pile-up
+    if (!publicClient || !policy || !registry) { setError("No desk selected."); return; }
+    inFlight.current = true;
     setError(""); setLoading(true);
     try {
-      if (!publicClient || !desk) throw new Error("No desk selected.");
-      const start = desk.fromBlock ?? net.deployBlock ?? 0n;
-      const payeeStart = desk.registryFromBlock ?? start;
+      const start = fromBlock ?? net.deployBlock ?? 0n;
+      const payeeStart = registryFromBlock ?? start;
 
-      const [payoutLogs, payeeLogs] = await Promise.all([
-        scanChunked(publicClient as never, desk.policy, payoutEvent, start) as unknown as Promise<Array<{ args: { batchId: string; payeeId: string; to: Address; amount: bigint; ref: string }; transactionHash: string; blockNumber: bigint }>>,
-        scanChunked(publicClient as never, desk.registry, payeeEvent, payeeStart) as unknown as Promise<Array<{ args: { payeeId: string; label: string } }>>,
-      ]);
+      // Payee labels rarely change. Read them once per registry, then reuse.
+      let labelMap: Record<string, string> = {};
+      let cached = false;
+      try {
+        const raw = labelKey ? localStorage.getItem(labelKey) : null;
+        if (raw) { labelMap = JSON.parse(raw) as Record<string, string>; cached = true; }
+      } catch { /* ignore */ }
 
-      const labelMap: Record<string, string> = {};
-      for (const log of payeeLogs) labelMap[log.args.payeeId] = log.args.label;
+      const payeeLogs = cached
+        ? []
+        : await scanChunked(publicClient as never, registry, payeeEvent, payeeStart) as unknown as Array<{ args: { payeeId: string; label: string } }>;
+      if (!cached) {
+        for (const log of payeeLogs) labelMap[log.args.payeeId] = log.args.label;
+        try { if (labelKey) localStorage.setItem(labelKey, JSON.stringify(labelMap)); } catch { /* ignore */ }
+      }
       setLabels(labelMap);
 
+      const payoutLogs = await scanChunked(publicClient as never, policy, payoutEvent, start) as unknown as Array<{ args: { batchId: string; payeeId: string; to: Address; amount: bigint; ref: string }; transactionHash: string; blockNumber: bigint }>;
       const all: Payout[] = payoutLogs.map((log) => ({
         batchId: log.args.batchId,
         payeeId: log.args.payeeId,
@@ -102,11 +121,15 @@ export default function Proof() {
       }));
       setPayouts(all);
       setLoaded(true);
-    } catch (e) { setError((e as Error).message.slice(0, 220)); }
-    setLoading(false);
-  }, [publicClient, desk, net.deployBlock]);
+    } catch (e) {
+      setError((e as Error).message.slice(0, 220));
+    } finally {
+      inFlight.current = false;
+      setLoading(false);
+    }
+  }, [publicClient, policy, registry, fromBlock, registryFromBlock, net.deployBlock, net.key, labelKey]);
 
-  useEffect(() => { refresh(); }, [refresh]);
+  useEffect(() => { void refresh(); }, [refresh]);
 
   const batches: Batch[] = useMemo(() => {
     const map = new Map<string, Batch>();
