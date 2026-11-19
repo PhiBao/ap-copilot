@@ -1,4 +1,11 @@
-# External dependency: funded test deployer
+# RESOLVED: funded test deployer
+
+Resolved on 19 Nov 2026 via the connected browser MetaMask wallet (faucet claim + wallet-signed
+deploy through the gated /deploy page). No private key was shared or committed.
+
+---
+
+# Original blocker note (historical)
 
 The Aevum web faucet (https://faucet.qday.info/en) requires a connected wallet holding ~0.0001 ETH / 1 USDT / 1 USDC on Ethereum mainnet plus a bot check. The Discord faucet requires Discord verification. No funded test key exists in this environment.
 
