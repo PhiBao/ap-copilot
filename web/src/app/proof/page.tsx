@@ -82,8 +82,8 @@ export default function Proof() {
       const start = desk.fromBlock ?? net.deployBlock ?? 0n;
 
       const [payoutLogs, payeeLogs] = await Promise.all([
-        scanChunked(payoutEvent as never, desk.policy, payoutEvent, start) as unknown as Promise<Array<{ args: { batchId: string; payeeId: string; to: Address; amount: bigint; ref: string }; transactionHash: string; blockNumber: bigint }>>,
-        scanChunked(payeeEvent as never, desk.registry, payeeEvent, start) as unknown as Promise<Array<{ args: { payeeId: string; label: string } }>>,
+        scanChunked(publicClient as never, desk.policy, payoutEvent, start) as unknown as Promise<Array<{ args: { batchId: string; payeeId: string; to: Address; amount: bigint; ref: string }; transactionHash: string; blockNumber: bigint }>>,
+        scanChunked(publicClient as never, desk.registry, payeeEvent, start) as unknown as Promise<Array<{ args: { payeeId: string; label: string } }>>,
       ]);
 
       const labelMap: Record<string, string> = {};
@@ -249,7 +249,17 @@ export default function Proof() {
                     <td>{l.payee}</td>
                     <td className="num">{l.amount}</td>
                     <td className="num">{l.onchain ? fromUnits(l.onchain.amount) : "—"}</td>
-                    <td><span className={`badge ${l.status === "matched" ? "badge-ok" : "badge-bad"}`}>{l.status}</span></td>
+                    <td>
+                      <span className={`badge ${l.status === "matched" ? "badge-ok" : "badge-bad"}`}>{l.status}</span>
+                      {l.status !== "matched" && (
+                        <div className="hint" style={{ maxWidth: 260 }}>
+                          {l.status === "not on chain" && "No payout with this reference has settled on this desk."}
+                          {l.status === "duplicate on chain" && "More than one payout carries this reference. Investigate before booking it."}
+                          {l.status === "amount differs" && `Books say ${l.amount}, chain paid ${l.onchain ? fromUnits(l.onchain.amount) : "—"}.`}
+                          {l.status === "address differs" && `Staged address differs from the verified payout ${l.onchain ? l.onchain.to.slice(0, 10) : ""}….`}
+                        </div>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>

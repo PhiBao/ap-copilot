@@ -278,6 +278,10 @@ contract Policy is EIP712 {
             if (!registry.isActive(p.payeeId)) revert PayeeNotActive(p.payeeId);
             bytes32 refHash = keccak256(bytes(p.ref));
             if (settledReference[refHash]) revert ReferenceAlreadySettled(p.ref);
+            // A reference can also not appear twice inside the same batch.
+            for (uint256 j = 0; j < i; j++) {
+                if (keccak256(bytes(payouts[j].ref)) == refHash) revert ReferenceAlreadySettled(p.ref);
+            }
             if (state.perPaymentCap != 0 && p.amount > state.perPaymentCap) {
                 revert CapExceeded(state.perPaymentCap, p.amount);
             }

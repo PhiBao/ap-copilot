@@ -8,6 +8,7 @@ import { useNetwork } from "@/lib/network";
 import { useDesk } from "@/lib/desk";
 import { parseInvoices, toUnits, fromUnits, type InvoiceLine } from "@/lib/intake";
 import { explainError } from "@/lib/errors";
+import { extractPdfText } from "@/lib/pdf";
 import { Steps } from "@/components/Steps";
 
 const SAMPLE = `# payee, amount, reference
@@ -38,6 +39,9 @@ export default function Batch() {
   const [batchHash, setBatchHash] = useState<`0x${string}` | undefined>();
   const [sentTotal, setSentTotal] = useState(0n);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [format, setFormat] = useState("");
+  const [fileName, setFileName] = useState("");
+  const [parsing, setParsing] = useState(false);
 
   const { writeContractAsync, isPending } = useWriteContract();
   const { isLoading: confirming, isSuccess } = useWaitForTransactionReceipt({ hash });
@@ -98,14 +102,43 @@ export default function Batch() {
 
   const activeStep = batchHash ? 5 : parsed.length > 0 ? 3 : 2;
 
-  function doParse() {
-    setError("");
-    const r = parseInvoices(input);
+  function applyParsed(text: string, name?: string) {
+    const r = parseInvoices(text);
     setParsed(r.lines);
     setWarnings(r.warnings);
+    setFormat(r.format);
+    if (name) setFileName(name);
     if (!batchId) setBatchId(`batch-${Date.now().toString(36)}`);
     setHash(undefined);
     setBatchHash(undefined);
+  }
+
+  function doParse() {
+    setError("");
+    applyParsed(input);
+  }
+
+  async function onFile(file: File) {
+    setError(""); setParsing(true);
+    try {
+      if (file.name.toLowerCase().endsWith(".pdf")) {
+        const { text, pages } = await extractPdfText(file);
+        if (!text.trim()) {
+          setError("That PDF has no extractable text (likely a scan). OCR is on the roadmap; paste the lines instead.");
+          setParsing(false);
+          return;
+        }
+        setInput(text);
+        applyParsed(text, `${file.name} · ${pages} pages`);
+      } else {
+        const text = await file.text();
+        setInput(text);
+        applyParsed(text, file.name);
+      }
+    } catch (e) {
+      setError(`Could not read that file: ${(e as Error).message.slice(0, 140)}`);
+    }
+    setParsing(false);
   }
 
   function updateLine(index: number, patch: Partial<InvoiceLine>) {
@@ -176,11 +209,23 @@ export default function Batch() {
           </div>
           <div className="panel-pad">
             <label className="field">
-              <span className="field-label">Paste CSV or “payee, amount, reference”</span>
+              <span className="field-label">Paste CSV, TSV, JSON, email text, or “payee, amount, reference”</span>
               <textarea value={input} onChange={(e) => setInput(e.target.value)} placeholder={SAMPLE} />
               <span className="hint">Parsing runs in your browser. Every extracted field is editable below.</span>
             </label>
-            <button className="btn" onClick={doParse} disabled={!input.trim()}>Extract lines</button>
+            <div className="row" style={{ marginBottom: 16 }}>
+              <button className="btn" onClick={doParse} disabled={!input.trim() || parsing}>{parsing ? "Reading…" : "Extract lines"}</button>
+              <label className="btn btn-secondary" style={{ cursor: "pointer" }}>
+                Upload a file
+                <input
+                  type="file"
+                  accept=".csv,.tsv,.json,.txt,.eml,.pdf,text/csv,text/tab-separated-values,application/json,application/pdf"
+                  style={{ display: "none" }}
+                  onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); }}
+                />
+              </label>
+              {fileName && <span className="hint mono truncate" title={fileName}>{fileName}</span>}
+            </div>
             {warnings.length > 0 && <div className="notice notice-bad" style={{ fontSize: 12 }}>{warnings.join(" ")}</div>}
             <label className="field" style={{ marginTop: 22 }}>
               <span className="field-label">Batch id</span>
@@ -193,8 +238,11 @@ export default function Batch() {
         <div className="panel">
           <div className="panel-head">
             <span className="panel-title">02 · Verification</span>
-            <span className={`badge ${blocked ? "badge-bad" : resolved.length ? "badge-ok" : "badge-neutral"}`}>
-              {blocked ? "Blocked" : resolved.length ? "Ready" : "Awaiting lines"}
+            <span className="row" style={{ gap: 8 }}>
+              {format && <span className="badge badge-neutral">{format}</span>}
+              <span className={`badge ${blocked ? "badge-bad" : resolved.length ? "badge-ok" : "badge-neutral"}`}>
+                {blocked ? "Blocked" : resolved.length ? "Ready" : "Awaiting lines"}
+              </span>
             </span>
           </div>
           {resolved.length === 0 ? (

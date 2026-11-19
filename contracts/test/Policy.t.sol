@@ -125,6 +125,14 @@ contract PolicyTest is Test {
         _exec(keccak256("batch-dup-2"), second);
     }
 
+    function test_same_reference_twice_in_one_batch_is_refused() public {
+        Policy.Payout[] memory p = new Policy.Payout[](2);
+        p[0] = Policy.Payout({payeeId: ID_A, amount: 10e6, ref: "INV-SAME"});
+        p[1] = Policy.Payout({payeeId: ID_B, amount: 10e6, ref: "INV-SAME"});
+        vm.expectRevert(abi.encodeWithSelector(Policy.ReferenceAlreadySettled.selector, "INV-SAME"));
+        _exec(keccak256("batch-same-ref"), p);
+    }
+
     function test_unregistered_payee_is_refused() public {
         Policy.Payout[] memory p = new Policy.Payout[](1);
         p[0] = Policy.Payout({payeeId: keccak256("payee:mallory"), amount: 1e6, ref: "bad"});
