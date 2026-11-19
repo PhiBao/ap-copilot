@@ -25,7 +25,7 @@
 | tUSD8 token (official test stablecoin) | https://explorer-test.qday.info/address/0x456569838f1d43009A91ebA4263147Afd7233483 |
 | Policy deploy transaction | https://explorer-test.qday.info/tx/0x1f1253b37c16b3a6d0f63fe62dfe03b439e5fdda4c7096956b8cf9c5dfe3efbe |
 
-The current Policy was deployed at block `3556589` from contract source commit `87ee96f`. It enforces owner-only settlement, cross-batch and intra-batch duplicate-reference guards. Read `lifetimeSpent()` and scan `PayoutSettled` events on the explorer; compare them with the CSV exported from the Proof page. No trust in our UI is required.
+The current Policy was deployed at block `3556589` from contract source commit `fac8a33`. It enforces owner-only settlement, cross-batch and intra-batch duplicate-reference guards. Read `lifetimeSpent()` and scan `PayoutSettled` events on the explorer; compare them with the CSV exported from the Proof page. No trust in our UI is required.
 
 ---
 
