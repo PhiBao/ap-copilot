@@ -42,6 +42,8 @@ export function Header() {
         </nav>
 
         <div className="header-actions">
+          <Link href="/admin" className="nav-link">Admin</Link>
+          <Link href="/new" className="nav-link">New desk</Link>
           <label className="network-select">
             <span className="sr-only">Network</span>
             <select value={net.key} onChange={(e) => select(e.target.value as "aevum" | "fork" | "local")}>

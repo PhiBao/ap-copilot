@@ -1,12 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useAccount, useReadContract, useReadContracts, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
+import { useAccount, usePublicClient, useReadContract, useReadContracts, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
 import { keccak256, toHex, type Address } from "viem";
 import { payeeRegistryAbi } from "@/lib/contracts";
 import { listRegisteredPayeeIds } from "@/lib/payee-events";
-import { usePublicClient } from "wagmi";
 import { useNetwork } from "@/lib/network";
+import { useDesk } from "@/lib/desk";
+import { explainError } from "@/lib/errors";
 
 interface PayeeRow {
   id: `0x${string}`;
@@ -14,31 +15,51 @@ interface PayeeRow {
   account: Address;
   status: number; // 1 active, 2 pending, 3 frozen
   pendingAccount?: Address;
-  changeRequestedAt?: bigint;
+  applyAt?: number;
+}
+
+function countdown(applyAt: number | undefined, now: number): string {
+  if (!applyAt) return "";
+  const left = applyAt - now;
+  if (left <= 0) return "ready to apply";
+  const h = Math.floor(left / 3600);
+  const m = Math.floor((left % 3600) / 60);
+  return `applies in ${h}h ${m}m`;
 }
 
 export default function Payees() {
   const { net } = useNetwork();
-  const { address } = useAccount();
-  const registry = net.registry;
+  const { desk } = useDesk();
+  const registry = desk?.registry;
   const publicClient = usePublicClient({ chainId: net.chain.id });
+  const { address } = useAccount();
+
   const [label, setLabel] = useState("");
   const [account, setAccount] = useState("");
   const [error, setError] = useState("");
   const [rows, setRows] = useState<PayeeRow[]>([]);
-
-  // Known ids from local metadata; on-chain state is the source of truth.
   const [knownIds, setKnownIds] = useState<`0x${string}`[]>([]);
+  const [now, setNow] = useState(Math.floor(Date.now() / 1000));
+
+  // Change-request form
+  const [changeId, setChangeId] = useState("");
+  const [changeAccount, setChangeAccount] = useState("");
+  const [changeLabel, setChangeLabel] = useState("");
+
+  useEffect(() => {
+    const t = setInterval(() => setNow(Math.floor(Date.now() / 1000)), 30000);
+    return () => clearInterval(t);
+  }, []);
+
   useEffect(() => {
     if (!publicClient || !registry) return;
-    listRegisteredPayeeIds(publicClient as never, registry, net.deployBlock ?? 0n)
+    listRegisteredPayeeIds(publicClient as never, registry, desk?.fromBlock ?? net.deployBlock ?? 0n)
       .then((onchain) => {
-        // Merge on-chain book with anything registered from this browser.
         setKnownIds((prev) => [...new Set([...onchain, ...prev])]);
         try { localStorage.setItem(`ledgerly:payees:${net.key}`, JSON.stringify(onchain)); } catch { /* ignore */ }
       })
       .catch(() => {});
-  }, [publicClient, registry, net.deployBlock, net.key]);
+  }, [publicClient, registry, desk?.fromBlock, net.deployBlock, net.key]);
 
   useEffect(() => {
     try {
@@ -58,10 +79,7 @@ export default function Payees() {
   });
 
   const contracts = knownIds.map((id) => ({
-    address: registry,
-    abi: payeeRegistryAbi,
-    functionName: "payee" as const,
-    args: [id] as const,
+    address: registry, abi: payeeRegistryAbi, functionName: "payee" as const, args: [id] as const,
   }));
   const { data: results, refetch } = useReadContracts({
     contracts,
@@ -80,44 +98,53 @@ export default function Payees() {
         account: p.account,
         status: p.status,
         pendingAccount: p.pendingAccount !== "0x0000000000000000000000000000000000000000" ? p.pendingAccount : undefined,
-        changeRequestedAt: p.changeRequestedAt > 0n ? p.changeRequestedAt : undefined,
+        applyAt: p.status === 2 && p.changeRequestedAt > 0n ? Number(p.changeRequestedAt) + Number(delay ?? 0n) : undefined,
       }];
     }));
-  }, [results, knownIds]);
+  }, [results, knownIds, delay]);
 
   const { writeContractAsync, isPending } = useWriteContract();
   const [hash, setHash] = useState<`0x${string}` | undefined>();
   const { isLoading: confirming, isSuccess } = useWaitForTransactionReceipt({ hash });
 
-  useEffect(() => { if (isSuccess) refetch(); }, [isSuccess, refetch]);
+  useEffect(() => { if (isSuccess) { refetch(); setError(""); } }, [isSuccess, refetch]);
 
-  async function register() {
+  const busy = isPending || confirming;
+
+  async function send(fn: () => Promise<`0x${string}`>) {
     setError("");
+    try { setHash(await fn()); } catch (e) { setError(explainError(e)); }
+  }
+
+  function register() {
     if (!registry || !address) { setError("Connect a wallet first."); return; }
-    if (!label.trim() || !account.startsWith("0x") || account.length !== 42) {
-      setError("Enter a payee name and a valid 0x address.");
-      return;
-    }
-    try {
-      const id = keccak256(toHex(label.trim()));
-      const h = await writeContractAsync({
-        address: registry, abi: payeeRegistryAbi,
-        functionName: "register", args: [id, account as Address, label.trim()],
-      });
-      setHash(h);
-      if (!knownIds.includes(id)) saveIds([...knownIds, id]);
-      setLabel(""); setAccount("");
-    } catch (e) { setError((e as Error).message.slice(0, 200)); }
+    if (!label.trim() || !/^0x[0-9a-fA-F]{40}$/.test(account)) { setError("Enter a payee name and a valid 0x address."); return; }
+    const id = keccak256(toHex(label.trim()));
+    if (!knownIds.includes(id)) saveIds([...knownIds, id]);
+    send(() => writeContractAsync({
+      address: registry, abi: payeeRegistryAbi, functionName: "register",
+      args: [id, account as Address, label.trim()],
+    })).then(() => { setLabel(""); setAccount(""); });
   }
 
-  async function action(fn: "freeze" | "unfreeze" | "applyChange" | "cancelChange", id: `0x${string}`) {
-    setError("");
+  function requestChange() {
     if (!registry) return;
-    try {
-      const h = await writeContractAsync({ address: registry, abi: payeeRegistryAbi, functionName: fn, args: [id] });
-      setHash(h);
-    } catch (e) { setError((e as Error).message.slice(0, 200)); }
+    if (!changeId) { setError("Pick a payee to change."); return; }
+    if (!/^0x[0-9a-fA-F]{40}$/.test(changeAccount)) { setError("Enter a valid new 0x address."); return; }
+    const row = rows.find((r) => r.id === changeId);
+    send(() => writeContractAsync({
+      address: registry, abi: payeeRegistryAbi, functionName: "requestChange",
+      args: [changeId as `0x${string}`, changeAccount as Address, changeLabel.trim() || row?.label || ""],
+    })).then(() => { setChangeAccount(""); setChangeLabel(""); });
   }
+
+  function action(fn: "freeze" | "unfreeze" | "applyChange" | "cancelChange", id: `0x${string}`) {
+    if (!registry) return;
+    send(() => writeContractAsync({ address: registry, abi: payeeRegistryAbi, functionName: fn, args: [id] }));
+  }
+
+  const active = rows.filter((r) => r.status === 1);
+  const selected = rows.find((r) => r.id === changeId);
 
   return (
     <main className="shell">
@@ -126,8 +153,8 @@ export default function Payees() {
         <h1>One name. One address.</h1>
         <p className="lede">
           Every payee has an id derived from its name and exactly one active payout address.
-          An address change waits in a public window of {delay !== undefined ? `${Number(delay) / 3600}h` : "…"}
-          — until then, payments still go to the old address. A dispute freezes it outright.
+          A change waits {delay !== undefined ? `${Number(delay) / 3600}h` : "…"} in public while the old
+          address stays payable — and a guardian can freeze it instantly.
         </p>
       </div>
 
@@ -142,20 +169,42 @@ export default function Payees() {
             <label className="field">
               <span className="field-label">Verified payout address</span>
               <input value={account} onChange={(e) => setAccount(e.target.value)} placeholder="0x…" className="mono" />
-              <span className="hint">Check this out-of-band. Ledgerly binds it on-chain; it cannot attest to real-world identity.</span>
+              <span className="hint">Confirm this out-of-band before binding it. Ledgerly cannot attest to real-world identity.</span>
             </label>
-            <button className="btn btn-copper" onClick={register} disabled={isPending || confirming}>Register payee</button>
-            {error && <p className="form-error">{error}</p>}
-            {isPending && <p className="hint">Sign the transaction…</p>}
-            {confirming && <p className="hint">Confirming on Aevum…</p>}
-            {isSuccess && hash && <p className="form-ok">Confirmed. <a className="link mono" href={`${net.chain.blockExplorers?.default.url}/tx/${hash}`} target="_blank" rel="noreferrer">{hash.slice(0, 18)}…</a></p>}
+            <button className="btn btn-copper" onClick={register} disabled={busy}>Register payee</button>
+          </div>
+
+          <div className="panel-head" style={{ borderTop: "1px solid var(--rule)" }}><span className="panel-title">Request an address change</span></div>
+          <div className="panel-pad">
+            <label className="field">
+              <span className="field-label">Payee</span>
+              <select value={changeId} onChange={(e) => { setChangeId(e.target.value); const r = rows.find((x) => x.id === e.target.value); setChangeLabel(r?.label ?? ""); }}>
+                <option value="">Choose…</option>
+                {active.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}
+              </select>
+            </label>
+            <label className="field">
+              <span className="field-label">New payout address</span>
+              <input value={changeAccount} onChange={(e) => setChangeAccount(e.target.value)} placeholder="0x…" className="mono" />
+            </label>
+            <label className="field">
+              <span className="field-label">New label (optional)</span>
+              <input value={changeLabel} onChange={(e) => setChangeLabel(e.target.value)} />
+            </label>
+            <button className="btn" onClick={requestChange} disabled={busy || !changeId}>Request change</button>
+            {selected && (
+              <p className="hint">
+                The old address keeps receiving payments until the window ends. Anyone can see the
+                pending change here and freeze it if it was not expected.
+              </p>
+            )}
           </div>
         </div>
 
         <div className="panel">
           <div className="panel-head"><span className="panel-title">The book</span><span className="badge badge-neutral">{rows.length} payees</span></div>
           {rows.length === 0 ? (
-            <div className="panel-pad"><p className="muted" style={{ margin: 0 }}>No payees yet. Register one, or load a committed book shared by your team.</p></div>
+            <div className="panel-pad"><p className="muted" style={{ margin: 0 }}>No payees yet. Register one, or <a className="link" href="/new">create a desk</a>.</p></div>
           ) : (
             <div className="table-wrap">
               <table>
@@ -169,14 +218,23 @@ export default function Payees() {
                         <span className={`badge ${r.status === 1 ? "badge-ok" : r.status === 2 ? "badge-warn" : "badge-bad"}`}>
                           {r.status === 1 ? "Active" : r.status === 2 ? "Change pending" : "Frozen"}
                         </span>
-                        {r.pendingAccount && <div className="hint mono" title={r.pendingAccount}>→ {r.pendingAccount.slice(0, 10)}…</div>}
+                        {r.pendingAccount && (
+                          <div className="hint">
+                            → <span className="mono" title={r.pendingAccount}>{r.pendingAccount.slice(0, 10)}…</span>
+                            <br />{countdown(r.applyAt, now)}
+                          </div>
+                        )}
                       </td>
                       <td>
                         <div className="row" style={{ gap: 6 }}>
-                          {r.status === 1 && <button className="btn btn-secondary btn-sm" onClick={() => action("freeze", r.id)}>Freeze</button>}
-                          {r.status === 3 && <button className="btn btn-secondary btn-sm" onClick={() => action("unfreeze", r.id)}>Unfreeze</button>}
-                          {r.status === 2 && <button className="btn btn-sm" onClick={() => action("applyChange", r.id)}>Apply change</button>}
-                          {r.status === 2 && <button className="btn btn-secondary btn-sm" onClick={() => action("cancelChange", r.id)}>Cancel</button>}
+                          {r.status === 1 && <button className="btn btn-secondary btn-sm" onClick={() => action("freeze", r.id)} disabled={busy}>Freeze</button>}
+                          {r.status === 3 && <button className="btn btn-secondary btn-sm" onClick={() => action("unfreeze", r.id)} disabled={busy}>Unfreeze</button>}
+                          {r.status === 2 && (
+                            <button className="btn btn-sm" onClick={() => action("applyChange", r.id)} disabled={busy || (r.applyAt ?? 0) > now} title={countdown(r.applyAt, now)}>
+                              Apply
+                            </button>
+                          )}
+                          {r.status === 2 && <button className="btn btn-secondary btn-sm" onClick={() => action("cancelChange", r.id)} disabled={busy}>Cancel</button>}
                         </div>
                       </td>
                     </tr>
@@ -188,11 +246,15 @@ export default function Payees() {
         </div>
       </div>
 
+      {error && <div className="notice notice-bad">{error}</div>}
+      {isSuccess && hash && (
+        <div className="notice notice-ok">Confirmed on Aevum. <a className="link mono" href={`${net.chain.blockExplorers?.default.url}/tx/${hash}`} target="_blank" rel="noreferrer">{hash.slice(0, 16)}…</a></div>
+      )}
+
       <div className="notice">
-        <strong>Change requests are the security boundary.</strong> When someone submits a changed
-        address, the old one stays live for the entire window. Ledgerly shows the pending change in
-        the batch review and refuses to pay the new address until the delay is over. Freeze is
-        instant and beats the queue.
+        <strong>Why the delay matters.</strong> A real "our bank details changed" attack needs one
+        click. Here it needs a public request, an hour of visibility, and nobody cancelling it —
+        and the old address stays the only payable one until the window closes.
       </div>
     </main>
   );

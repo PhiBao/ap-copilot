@@ -3,14 +3,14 @@
 import Link from "next/link";
 import { useAccount, useReadContract, useReadContracts } from "wagmi";
 import { erc20Abi, policyAbi, TUSD8 } from "@/lib/contracts";
-import { useNetwork } from "@/lib/network";
+import { useDesk } from "@/lib/desk";
 import { fromUnits } from "@/lib/intake";
 import { ProofPanel } from "@/components/ProofPanel";
 
 export default function Desk() {
   const { address, isConnected } = useAccount();
-  const { net } = useNetwork();
-  const policy = net.policy;
+  const { desk } = useDesk();
+  const policy = desk?.policy;
 
   const { data: st } = useReadContract({
     address: policy,
@@ -50,6 +50,7 @@ export default function Desk() {
           <div className="row" style={{ marginTop: 28 }}>
             <Link href="/batch" className="btn btn-copper">Start a batch <span aria-hidden="true">→</span></Link>
             <Link href="/docs" className="btn btn-secondary">How it works</Link>
+            <Link href="/new" className="btn btn-secondary">Create your desk</Link>
           </div>
           <p className="hint" style={{ marginTop: 14 }}>
             One sentence: <em>drop in your invoices; it stages one verified batch you approve once —
@@ -101,8 +102,8 @@ export default function Desk() {
             not a footnote.
           </p>
           <p className="hint" style={{ marginTop: 12 }}>
-            Built on the MIT Aevum Starter Kit's chain config and EIP-3009 plumbing; contracts
-            and workflow are original. See the README for provenance.
+            This demo desk is live on Aevum. <Link href="/new" className="link">Create your own</Link> in
+            two wallet transactions, or open the <Link href="/admin" className="link">desk controls</Link>.
           </p>
         </div>
       </div>

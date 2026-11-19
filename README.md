@@ -17,13 +17,13 @@
 
 | Artifact | Link |
 | --- | --- |
-| PayeeRegistry contract | https://explorer-test.qday.info/address/0x770bdcbc6ef06f99a1c239a77b6792ef1006cf97 |
-| Policy contract | https://explorer-test.qday.info/address/0x645174d655814839a85bd80d2f54b35a7160465e |
-| Live batch settlement (0.1 tUSD8 to three verified payees) | https://explorer-test.qday.info/tx/0x1119a5bef298513eba4978bf34c37925a4948f1840221aa9e1277b19d9ccb4c0 |
+| PayeeRegistry contract | https://explorer-test.qday.info/address/0x5d7f15aa513cd0ae8aac81580e5b3e4758f985a4 |
+| Policy contract | https://explorer-test.qday.info/address/0x4eba7ad4e07f0d7eb053b84f0e64f6a5d9549312 |
+| Live batch settlement (0.1 tUSD8 to three verified payees) | https://explorer-test.qday.info/tx/0x43b8563675ad2694ffe7007608f8d94458d3bd1c2d2e7351001fe56104414d9a |
 | tUSD8 token (official test stablecoin) | https://explorer-test.qday.info/address/0x456569838f1d43009A91ebA4263147Afd7233483 |
-| Deployer transaction for the current Policy | https://explorer-test.qday.info/tx/0x47e5299f358052b04d733cd6bc2c56f521204ef6725b615d3bbaa47b85fb0873 |
+| Policy deploy transaction (v2) | https://explorer-test.qday.info/tx/0x9e154cf7155c7faf8a75018240063c9004755984ac77c3ae3debbfa63f3f795e |
 
-The current Policy was deployed at block `3481328+`. Read `lifetimeSpent()` and scan `PayoutSettled` events on the explorer; compare them with the CSV exported from the Proof page. No trust in our UI is required.
+The current Policy was deployed at block `3552403`. Read `lifetimeSpent()` and scan `PayoutSettled` events on the explorer; compare them with the CSV exported from the Proof page. No trust in our UI is required.
 
 ---
 
@@ -64,7 +64,7 @@ This is not "AI + a database". The novel unit is a **human-approved, contract-en
 - **Track:** Native AI Assistants — automated extraction across file formats, single/batch tUSD8 transactions staged for user approval, on-chain reconciliation that flags discrepancies in plain language with accounting-ready exports.
 - **No partner prizes exist in this event.** The only awards are overall 1st/2nd/3rd ($800/$500/$200 USDT), so no sponsor technology was added to qualify for anything.
 - **Aevum integration map:** `contracts/src/PayeeRegistry.sol` and `contracts/src/Policy.sol` are deployed on Aevum 44005 and settle the official tUSD8; `web/src/lib/contracts.ts` holds ABIs and addresses; `web/src/lib/payee-events.ts` reads registry events in 1,000-block chunks for Aevum's RPC limit; `web/src/app/proof/page.tsx` reads `PayoutSettled` events and produces explorer links. The starter kit's chain config, EIP-3009 patterns and Shanghai opcode check are reused with attribution.
-- **Judging criteria:** Innovation (20) — batch-decision control and delayed payee changes; UX (15) — five guided steps, editable fields, plain-language blocks; Demo (10) — a live blocked-payment case and a real settlement; Documentation (10) — this README, diagram, verification matrix; Technical/platform (15) — scoped caps, expiry, revocation, EIP-3009 gasless route and 36 Foundry tests; Utility (15) — named buyer and monthly workflow; Safety (15) — owner/guardian roles, delay window, freeze, batch replay protection, audit events.
+- **Judging criteria:** Innovation (20) — batch-decision control and delayed payee changes; UX (15) — five guided steps, editable fields, plain-language blocks; Demo (10) — a live blocked-payment case and a real settlement; Documentation (10) — this README, diagram, verification matrix; Technical/platform (15) — owner-gated settlement, duplicate-invoice guard, caps, expiry, revocation, EIP-3009 gasless route and 38 Foundry tests; Utility (15) — named buyer and monthly workflow; Safety (15) — owner/guardian roles, delay window, freeze, batch replay protection, audit events.
 
 ## Provenance
 
@@ -118,7 +118,9 @@ To deploy your own instance, use the gated `/deploy` page with a funded browser 
 | Batch settlement to verified payees | Real, live | batch tx `0x1119a5be…` and three `PayoutSettled` events |
 | Pending change cannot redirect payment | Real, tested | `test_pending_change_does_not_redirect_payment`, live fork probe |
 | Frozen payee blocks payment | Real, tested | `test_frozen_payee_is_refused`, live fork probe |
-| Caps/expiry/revoke | Real, tested | Foundry suite (36 tests) |
+| Owner-only settlement | Real, tested | `test_owner_only_settlement` |
+| Duplicate invoice reference refused | Real, tested | `test_invoice_reference_cannot_settle_twice`, live UI block |
+| Caps/expiry/revoke | Real, tested | Foundry suite (38 tests) |
 | Gasless EIP-3009 settlement | Real, tested | `test_gasless_batch_with_authorizations` |
 | Scanned-PDF OCR extraction | Not implemented | roadmap |
 | KYC / real-world identity attestation | Not implemented; payee book is self-managed by design | docs/QA.md |
@@ -128,15 +130,16 @@ No mocked behavior is presented as real. The live app reads and writes the deplo
 ## Security and reliability
 
 - **Roles:** `PayeeRegistry` separates `owner` (registration, changes) from `guardian` (freeze, cancel). A stranger cannot request a redirect.
+- **Approval is enforced:** `Policy.executeBatch` is owner-only; the alternative is an EIP-712 signed batch, where the signature is the approval.
 - **Delay:** address changes land only after a public window (1 hour in the live deployment). The old address stays payable meanwhile; freeze is instant.
 - **Budget:** the Policy spends its own deposited balance, so a compromised owner key cannot move more than the funded budget and caps allow. Instant `revoke()` stops all settlement.
-- **Replay:** each `batchId` settles once. Amounts and payee ids are checked before any transfer.
+- **Replay:** each `batchId` settles once and each invoice reference can settle once across all batches. Amounts and payee ids are checked before any transfer.
 - **External failure:** RPC calls are client-side; the Proof page scans logs in 1,000-block chunks. If a read fails the UI shows an error rather than a fake success.
 - **Known weaknesses:** the owner/guardian are EOA keys in the demo; no multisig, no formal audit, no transaction simulation UI; unregistering a frozen payee does not delete its historical events (by design, for auditability).
 
 ## Limitations and roadmap
 
-1. Scanned-PDF OCR and multi-format ingestion (the current parser handles CSV and pasted rows).
+1. Scanned-PDF OCR, email parsing and LLM-assisted extraction (current intake handles CSV and pasted rows deterministically).
 2. ERC-8004 identity integration once the Aevum registry address is published by QDay.
 3. Smart-account / session-key delegation for a non-owner operator (the testnet bundler is live but the Kernel factory is unstaked; documented workaround exists).
 4. Recurring mandates and split payouts as should-ship extensions.

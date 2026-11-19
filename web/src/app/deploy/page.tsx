@@ -40,6 +40,21 @@ export default function Deploy() {
     setError("");
     if (!address || !isAddress(registry) || !isAddress(policy)) { setError("Paste both deployed addresses first."); return; }
     try {
+      // Demo book: the three payees used in the example batch.
+      const demo = [
+        { label: "Studio North Ltd", account: "0x3333333333333333333333333333333333333333" as Address },
+        { label: "Bright Design Co", account: "0x4444444444444444444444444444444444444444" as Address },
+        { label: "Rivera Consulting", account: "0x5555555555555555555555555555555555555555" as Address },
+      ];
+      for (const d of demo) {
+        try {
+          await writeContractAsync({
+            address: registry as Address, abi: payeeRegistryAbi, functionName: "register",
+            args: [keccak256(toHex(d.label)), d.account, d.label],
+          });
+        } catch { /* already registered — fine */ }
+      }
+      setStep("demo payees ready");
       const expiry = BigInt(Math.floor(Date.now() / 1000) + 30 * 86400);
       await writeContractAsync({ address: policy as Address, abi: policyAbi, functionName: "configure", args: [parseUnits("0.5", 6), parseUnits("1", 6), parseUnits("5", 6), expiry] });
       setStep("policy configured");

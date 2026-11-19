@@ -2,23 +2,23 @@
 
 import { useReadContract } from "wagmi";
 import { policyAbi } from "@/lib/contracts";
-import { useNetwork } from "@/lib/network";
+import { useDesk } from "@/lib/desk";
 import { fromUnits } from "@/lib/intake";
 
 /** Live on-chain state. Refreshes on every block; no fixtures. */
 export function ProofPanel() {
-  const { net } = useNetwork();
+  const { desk } = useDesk();
   const { data: st } = useReadContract({
-    address: net.policy,
+    address: desk?.policy,
     abi: policyAbi,
     functionName: "state",
-    query: { enabled: !!net.policy, refetchInterval: 4000 },
+    query: { enabled: !!desk?.policy, refetchInterval: 4000 },
   });
   const { data: rev } = useReadContract({
-    address: net.policy,
+    address: desk?.policy,
     abi: policyAbi,
     functionName: "remainingDaily",
-    query: { enabled: !!net.policy, refetchInterval: 4000 },
+    query: { enabled: !!desk?.policy, refetchInterval: 4000 },
   });
 
   return (
