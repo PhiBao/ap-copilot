@@ -56,13 +56,16 @@ export default function Admin() {
   const isOwner = !!address && !!owner && address.toLowerCase() === owner.toLowerCase();
   const revoked = st?.[4] ?? false;
 
+  // Fill the form once. Polling must not overwrite what the operator is typing.
+  const [hydrated, setHydrated] = useState(false);
   useEffect(() => {
-    if (!st) return;
+    if (!st || hydrated) return;
     setPerPayment(st[0] === 0n ? "0" : fromUnits(st[0]));
     setDaily(st[1] === 0n ? "0" : fromUnits(st[1]));
     setLifetime(st[2] === 0n ? "0" : fromUnits(st[2]));
     setExpiry(toDateInput(st[3]));
-  }, [st]);
+    setHydrated(true);
+  }, [st, hydrated]);
 
   const { writeContractAsync, isPending } = useWriteContract();
   const [hash, setHash] = useState<`0x${string}` | undefined>();

@@ -77,16 +77,24 @@ export default function Batch() {
     query: { enabled: !!policy && refHashes.length > 0 },
   });
 
+  const refCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const l of reviewed) counts.set(l.reference.trim(), (counts.get(l.reference.trim()) ?? 0) + 1);
+    return counts;
+  }, [reviewed]);
+
   const resolved = useMemo(() => reviewed.map((l, i) => {
     const r = checks?.[i];
-    const duplicate = refChecks?.[i]?.status === "success" ? Boolean(refChecks[i].result) : false;
+    const duplicate =
+      (refChecks?.[i]?.status === "success" ? Boolean(refChecks[i].result) : false) ||
+      (refCounts.get(l.reference.trim()) ?? 0) > 1;
     if (!r || r.status !== "success" || !r.result) return { ...l, duplicate };
     const p = r.result as unknown as { account: Address; label: string; status: number };
     if (p.status === 0) return { ...l, status: "unknown" as const, duplicate };
     if (p.status === 2) return { ...l, status: "pending" as const, account: p.account, duplicate };
     if (p.status === 3) return { ...l, status: "frozen" as const, account: p.account, duplicate };
     return { ...l, status: "ok" as const, account: p.account, duplicate };
-  }), [reviewed, checks, refChecks]);
+  }), [reviewed, checks, refChecks, refCounts]);
 
   const total = resolved.reduce((sum, l) => {
     try { return sum + toUnits(l.amount); } catch { return sum; }

@@ -28,8 +28,8 @@ export default function Desk() {
     address: TUSD8,
     abi: erc20Abi,
     functionName: "balanceOf",
-    args: policy && address ? [policy] : undefined,
-    query: { enabled: !!policy && !!address },
+    args: policy ? [policy] : undefined,
+    query: { enabled: !!policy, refetchInterval: 5000 },
   });
 
   const cap = st?.[1] ?? 0n;
@@ -67,7 +67,7 @@ export default function Desk() {
         <div className="stat">
           <div className="stat-label">Working balance</div>
           <div className="stat-value">{balance !== undefined ? fromUnits(balance) : "—"} <small>tUSD8</small></div>
-          <div className="hint">{isConnected ? (isOwner ? "You own this policy" : "Connected as non-owner") : "Connect to read your policy"}</div>
+          <div className="hint">{isConnected ? (isOwner ? "You own this desk" : "Connected as non-owner") : "Read from the contract — connect to act"}</div>
         </div>
         <div className="stat">
           <div className="stat-label">Daily cap</div>

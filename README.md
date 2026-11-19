@@ -9,9 +9,11 @@
 
 ### Try it in 60 seconds
 
-1. Open **Batch**, click **Load example**, then **Extract lines**.
-2. Watch payee verification: registered names show a verified on-chain address; unknown names block the batch. Edit any extracted field before staging — the software proposes, you decide.
-3. Click **Approve & settle batch**, approve in your wallet, then open **Proof** and follow the on-chain payouts to the explorer.
+1. Open **Batch**, click **Load example**, then **Extract lines** (or upload a CSV/TSV/JSON/email/PDF invoice file).
+2. Watch verification: registered names resolve to a verified on-chain address; unknown names block the batch; duplicate invoice references block it too. Every extracted field is editable — the software proposes, you decide.
+3. Click **Approve & settle batch** with the owner wallet, then open **Proof** to see every payout rebuilt from chain events and reconcile an uploaded CSV.
+
+**Make it yours:** open **New desk**, deploy your own registry and policy in two wallet transactions, fund a budget, and start paying. No account, no server, no custody.
 
 ### Proof (independently checkable on Aevum testnet, chain 44005)
 
@@ -32,7 +34,7 @@ The current Policy was deployed at block `3552403`. Read `lifetimeSpent()` and s
 Ledgerly is an approval-first accounts-payable copilot for small Web3 teams and DAOs that pay 5–30 contractors or suppliers per month in stablecoins.
 
 - **Problem:** invoices arrive as PDFs, emails and chat messages. Someone copies addresses into a spreadsheet, asks a manager in chat to approve, pastes addresses into a wallet, then retains no books-ready record. Industry data puts 29% of freelance invoices late and 85% of freelancers paid late at least sometimes; per-$1,000 cross-border costs reach $45–$69 on PayPal and $70–$100+ on SWIFT ([Spark](https://spark.money/research/stablecoin-freelancer-gig-payments), [Autochase](https://autochase.app/blog/freelancer-late-payment-statistics)).
-- **Current alternative:** Request Network / Request Finance for invoicing ([request.network](https://request.network/pricing)), plus spreadsheets and manual wallet transfers. Invoicing is solved; the **decision and reconciliation** are not.
+- **Current alternative:** Request Network / Request Finance for invoicing ([request.network](https://request.network/pricing)), plus spreadsheets and manual wallet transfers. Invoicing is solved; the **decision, duplicate control and reconciliation** are not.
 - **Value proposition:** one batch of payments, verified against a one-address payee book, with caps, expiry and instant revocation enforced by a contract, followed by an exported reconciliation that matches the chain.
 - **Why now:** gasless tUSD8 settlement and cheap, fast Aevum execution make a multi-payout flow practical without custodial middleware.
 - **Key insight:** the unit of control is the **batch decision**, not the transaction. Software may extract and propose; a deterministic contract check and a deliberate human approval decide.
@@ -57,7 +59,9 @@ This is not "AI + a database". The novel unit is a **human-approved, contract-en
 
 - Document intake proposes; a deterministic, on-chain payee lookup disposes. An LLM can later improve extraction without ever gaining payment authority.
 - The destination address is resolved by the contract **at settlement time** from the payee id, so a staged batch cannot be rerouted by a changed address.
+- Every invoice reference is single-use across all batches, and duplicate references inside one batch are refused by the contract.
 - The accounting export is generated from actual chain events, not from the UI's optimism.
+- Intake accepts CSV, TSV, JSON, labelled email text and text-based PDFs entirely client-side; no document leaves the browser.
 
 ## Hackathon relevance
 
@@ -122,6 +126,8 @@ To deploy your own instance, use the gated `/deploy` page with a funded browser 
 | Duplicate invoice reference refused | Real, tested | `test_invoice_reference_cannot_settle_twice`, live UI block |
 | Caps/expiry/revoke | Real, tested | Foundry suite (38 tests) |
 | Gasless EIP-3009 settlement | Real, tested | `test_gasless_batch_with_authorizations` |
+| Multi-format intake (CSV/TSV/JSON/email/PDF) | Real, client-side | `web/src/lib/intake.ts`, `web/src/lib/pdf.ts`; verified with a generated invoice PDF |
+| Self-serve desk deployment | Real, wallet-signed | `/new` page; two contract deploys plus funding |
 | Scanned-PDF OCR extraction | Not implemented | roadmap |
 | KYC / real-world identity attestation | Not implemented; payee book is self-managed by design | docs/QA.md |
 
@@ -135,7 +141,7 @@ No mocked behavior is presented as real. The live app reads and writes the deplo
 - **Budget:** the Policy spends its own deposited balance, so a compromised owner key cannot move more than the funded budget and caps allow. Instant `revoke()` stops all settlement.
 - **Replay:** each `batchId` settles once and each invoice reference can settle once across all batches. Amounts and payee ids are checked before any transfer.
 - **External failure:** RPC calls are client-side; the Proof page scans logs in 1,000-block chunks. If a read fails the UI shows an error rather than a fake success.
-- **Known weaknesses:** the owner/guardian are EOA keys in the demo; no multisig, no formal audit, no transaction simulation UI; unregistering a frozen payee does not delete its historical events (by design, for auditability).
+- **Known weaknesses:** the owner/guardian are EOA keys in the demo; no multisig, no formal audit, no transaction simulation UI; unregistering a frozen payee does not delete its historical events (by design, for auditability); PDF intake needs a text layer (scans are refused with a clear message).
 
 ## Limitations and roadmap
 
