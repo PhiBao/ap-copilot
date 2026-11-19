@@ -37,6 +37,20 @@ Aevum-only settlement · all code written in build window · public repo, no sec
 
 3–5 operator conversations (DAO/agency/ops) before/early in build. If <2 confirm monthly batch-pay pain → pivot to Mandate subscriptions (runner-up, Open Innovation).
 
+## P0 hardening plan (approved 19 Nov, after fresh product review)
+
+1. Contract v2: owner/signed-only settlement, on-chain duplicate-reference guard, `ChangeCancelled` event; **one redeploy** on Aevum.
+2. "Create your desk": any team deploys its own Registry+Policy from its wallet in two transactions; per-wallet desk selection.
+3. Admin lifecycle UI: configure caps/expiry, deposit/withdraw, revoke, plain-language errors.
+4. Payee-change UX: request change with countdown, apply/cancel — the wedge must be performable.
+5. Batch repairs: remove vestigial ERC-20 approval; demo amounts fit caps; inline register/map for Not-in-book; duplicate warnings.
+6. Proof fix: topic-filtered queries, all-batch history from `BatchSettled`, no localStorage dependency.
+
+## P1 (only after P0 lands)
+
+7. Real assistant intake: JSON/TSV/email text + client-side PDF text extraction; optional LLM behind env flag; sentences for discrepancies.
+8. Signed gasless approval in the UI (EIP-712 owner signature, anyone submits).
+
 ## Loop discipline
 
 Each iteration: commit small → verify end-to-end → report checkpoint status (works / behind / proposed cuts). Never borrow time across checkpoints. Read `~/common/AGENTS.md` + `FOUNDER.md` as the source of truth.
