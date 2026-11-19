@@ -25,7 +25,7 @@
 | tUSD8 token (official test stablecoin) | https://explorer-test.qday.info/address/0x456569838f1d43009A91ebA4263147Afd7233483 |
 | Policy deploy transaction (v2) | https://explorer-test.qday.info/tx/0x9e154cf7155c7faf8a75018240063c9004755984ac77c3ae3debbfa63f3f795e |
 
-The current Policy was deployed at block `3552403`. Read `lifetimeSpent()` and scan `PayoutSettled` events on the explorer; compare them with the CSV exported from the Proof page. No trust in our UI is required.
+The current Policy was deployed at block `3552403` from contract source commit `3ab57f2`. The repository head also contains an intra-batch duplicate guard (`87ee96f`, tested) queued for the next policy deployment. Read `lifetimeSpent()` and scan `PayoutSettled` events on the explorer; compare them with the CSV exported from the Proof page. No trust in our UI is required.
 
 ---
 
@@ -68,7 +68,7 @@ This is not "AI + a database". The novel unit is a **human-approved, contract-en
 - **Track:** Native AI Assistants — automated extraction across file formats, single/batch tUSD8 transactions staged for user approval, on-chain reconciliation that flags discrepancies in plain language with accounting-ready exports.
 - **No partner prizes exist in this event.** The only awards are overall 1st/2nd/3rd ($800/$500/$200 USDT), so no sponsor technology was added to qualify for anything.
 - **Aevum integration map:** `contracts/src/PayeeRegistry.sol` and `contracts/src/Policy.sol` are deployed on Aevum 44005 and settle the official tUSD8; `web/src/lib/contracts.ts` holds ABIs and addresses; `web/src/lib/payee-events.ts` reads registry events in 1,000-block chunks for Aevum's RPC limit; `web/src/app/proof/page.tsx` reads `PayoutSettled` events and produces explorer links. The starter kit's chain config, EIP-3009 patterns and Shanghai opcode check are reused with attribution.
-- **Judging criteria:** Innovation (20) — batch-decision control and delayed payee changes; UX (15) — five guided steps, editable fields, plain-language blocks; Demo (10) — a live blocked-payment case and a real settlement; Documentation (10) — this README, diagram, verification matrix; Technical/platform (15) — owner-gated settlement, duplicate-invoice guard, caps, expiry, revocation, EIP-3009 gasless route and 38 Foundry tests; Utility (15) — named buyer and monthly workflow; Safety (15) — owner/guardian roles, delay window, freeze, batch replay protection, audit events.
+- **Judging criteria:** Innovation (20) — batch-decision control and delayed payee changes; UX (15) — five guided steps, editable fields, plain-language blocks; Demo (10) — a live blocked-payment case and a real settlement; Documentation (10) — this README, diagram, verification matrix; Technical/platform (15) — owner-gated settlement, duplicate-invoice guard, caps, expiry, revocation, EIP-3009 gasless route and 39 Foundry tests; Utility (15) — named buyer and monthly workflow; Safety (15) — owner/guardian roles, delay window, freeze, batch replay protection, audit events.
 
 ## Provenance
 
@@ -77,6 +77,8 @@ This is not "AI + a database". The novel unit is a **human-approved, contract-en
 - **AI tooling:** this agent used planning/discovery notes in `~/common/discovery/qday/`, recorded in `docs/PROVENANCE.md`. No model API key or service is used at runtime; extraction is deterministic.
 
 ## Architecture
+
+![Architecture: what enforces the payee decision](docs/architecture.svg)
 
 ```
 Browser (Next.js) ── viem/wagmi ── Aevum RPC (44005)
@@ -124,7 +126,7 @@ To deploy your own instance, use the gated `/deploy` page with a funded browser 
 | Frozen payee blocks payment | Real, tested | `test_frozen_payee_is_refused`, live fork probe |
 | Owner-only settlement | Real, tested | `test_owner_only_settlement` |
 | Duplicate invoice reference refused | Real, live | `test_invoice_reference_cannot_settle_twice`, live UI block on the demo desk |
-| Caps/expiry/revoke | Real, tested | Foundry suite (38 tests) |
+| Caps/expiry/revoke | Real, tested | Foundry suite (39 tests) |
 | Gasless EIP-3009 settlement | Real, tested | `test_gasless_batch_with_authorizations` |
 | Multi-format intake (CSV/TSV/JSON/email/PDF) | Real, client-side | `web/src/lib/intake.ts`, `web/src/lib/pdf.ts`; verified with a generated invoice PDF |
 | Self-serve desk deployment | Real, wallet-signed | `/new` page; two contract deploys plus funding |

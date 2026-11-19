@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useAccount, useDeployContract, useReadContract, useWriteContract } from "wagmi";
+import { useAccount, useDeployContract, useReadContract, useWaitForTransactionReceipt, useWriteContract } from "wagmi";
 import { keccak256, toHex, parseUnits, type Address } from "viem";
 import { payeeRegistryAbi, policyAbi, erc20Abi, TUSD8 } from "@/lib/contracts";
 import { PAYEEREGISTRY_BYTECODE } from "@/lib/payeeregistry-bytecode";
@@ -24,14 +24,34 @@ export default function NewDesk() {
   const [registry, setRegistry] = useState("");
   const [policy, setPolicy] = useState("");
   const [step, setStep] = useState<"idle" | "registry" | "policy" | "funding" | "done">("idle");
+  const [deployHash, setDeployHash] = useState<`0x${string}` | undefined>();
+  const [deployKind, setDeployKind] = useState<"registry" | "policy" | null>(null);
   const [error, setError] = useState("");
   const [amount, setAmount] = useState("0.1");
+
+  const { data: receipt } = useWaitForTransactionReceipt({ hash: deployHash });
+
+  useEffect(() => {
+    const deployed = receipt?.contractAddress;
+    if (!deployed || !deployKind) return;
+    if (deployKind === "registry") setRegistry(deployed);
+    else setPolicy(deployed);
+    setDeployKind(null);
+    setDeployHash(undefined);
+    setError("");
+  }, [receipt, deployKind]);
 
   const { data: balance } = useReadContract({
     address: TUSD8, abi: erc20Abi, functionName: "balanceOf",
     args: address ? [address] : undefined,
     query: { enabled: !!address, refetchInterval: 6000 },
   });
+
+  function setHashPending(h: `0x${string}`, kind: "registry" | "policy") {
+    setDeployHash(h);
+    setDeployKind(kind);
+    setError(kind === "registry" ? "Deploying registry… the address fills in when the transaction confirms." : "Deploying policy… the address fills in when the transaction confirms.");
+  }
 
   async function deployRegistry() {
     setError(""); setStep("registry");
@@ -41,8 +61,8 @@ export default function NewDesk() {
         // Owner and guardian both start as the connected wallet; split them later if you want.
         args: [3600n, address!, address!],
       });
+      setHashPending(h, "registry");
       setStep("idle");
-      setError(`Registry deploy sent (${h.slice(0, 12)}…). Copy its contract address from the explorer into the field below.`);
     } catch (e) { setStep("idle"); setError((e as Error).message.slice(0, 240)); }
   }
 
@@ -54,8 +74,8 @@ export default function NewDesk() {
         abi: policyAbi, bytecode: POLICY_BYTECODE,
         args: [TUSD8, registry as Address, address!],
       });
+      setHashPending(h, "policy");
       setStep("idle");
-      setError(`Policy deploy sent (${h.slice(0, 12)}…). Copy its contract address into the field below.`);
     } catch (e) { setStep("idle"); setError((e as Error).message.slice(0, 240)); }
   }
 
@@ -116,7 +136,7 @@ export default function NewDesk() {
               <span className="field-label">Policy address</span>
               <input className="mono" value={policy} onChange={(e) => setPolicy(e.target.value)} placeholder="0x…" />
             </label>
-            <p className="hint">Two wallet transactions. The addresses appear in your wallet's activity and on the Aevum explorer.</p>
+            <p className="hint">Two wallet transactions. The addresses fill in automatically from each receipt.</p>
           </div>
         </div>
 
